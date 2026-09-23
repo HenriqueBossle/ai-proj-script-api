@@ -12,7 +12,7 @@ class Script extends Model
         'topic',
         'source_text',
         'style_text',
-        'content',
+        'generated_content',
         'status',
         'error_message'
     ];
