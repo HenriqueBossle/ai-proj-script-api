@@ -2,8 +2,10 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\StoreScriptRequest;
+use App\Http\Requests\UpdateScriptRequest;
+use App\Http\Resources\ScriptResource;
 use App\Models\Script;
-use Illuminate\Http\Request;
 
 class ScriptController extends Controller
 {
