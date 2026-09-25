@@ -26,9 +26,6 @@ class UpdateScriptRequest extends FormRequest
             'topic' => ['sometimes', 'string', 'max:255'],
             'source_text' => ['sometimes', 'nullable', 'string'],
             'style_text' => ['sometimes', 'nullable', 'string'],
-            'generated_content' => ['sometimes', 'nullable', 'string'],
-            'status' => ['sometimes', 'string', 'in:pending,processing,done,failed'],
-            'error_message' => ['sometimes', 'nullable', 'string'],
         ];
     }
 }
