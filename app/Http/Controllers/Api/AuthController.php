@@ -4,11 +4,9 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Requests\Auth\RegisterRequest;
 use App\Models\User;
-use Illuminate\Auth\Events\Registered;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\ValidationException;
-use Illuminate\Support\Facades\URL;
 
 class AuthController extends Controller
 {
@@ -31,16 +29,10 @@ class AuthController extends Controller
             ]);
         }
 
-        if (!$user->hasVerifiedEmail()) {
-            return response()->json([
-                'message' => 'Verifique seu e-mail antes de fazer login'
-            ], 403);
-        }
-
-        // 4. Gera o token do Sanctum
+        // 3. Gera o token do Sanctum
         $token = $user->createToken($request->device_name)->plainTextToken;
 
-        // 5. Retorna o token e os dados básicos do usuário
+        // 4. Retorna o token e os dados básicos do usuário
         return response()->json([
             'token' => $token,
             'user' => $user
@@ -59,24 +51,17 @@ class AuthController extends Controller
 
     public function register(RegisterRequest $request)
     {
-        $user = \App\Models\User::create([
+        $user = User::create([
             'name' => $request->name,
             'email' => $request->email,
-            'password' => \Illuminate\Support\Facades\Hash::make($request->password)
+            'password' => Hash::make($request->password)
         ]);
+
+        $token = $user->createToken($request->device_name ?? 'default')->plainTextToken;
+
+        return response()->json([
+            'token' => $token,
+            'user' => $user,
+        ], 201);
     }
 }
-        /*$link = URL::temporarySignedRoute(
-            'verification.verify',
-            now()->addMinutes(60),
-            [
-                'id' => $user->id,
-                'hash' => sha1($user->email),
-            ]
-        );
-
-        BrevoService::sendVerificationEmail(
-            $user->email,
-            $user->name,
-            $link
-        );*/
