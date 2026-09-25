@@ -23,13 +23,9 @@ class StoreScriptRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'user_id' => ['required', 'integer', 'exists:users,id'],
             'topic' => ['required', 'string', 'max:255'],
             'source_text' => ['nullable', 'string'],
             'style_text' => ['nullable', 'string'],
-            'generated_content' => ['nullable', 'string'],
-            'status' => ['sometimes', 'string', 'in:pending,processing,done,failed'],
-            'error_message' => ['nullable', 'string'],
         ];
     }
 }

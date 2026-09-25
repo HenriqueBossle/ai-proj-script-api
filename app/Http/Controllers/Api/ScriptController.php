@@ -17,6 +17,8 @@ class ScriptController extends Controller
     public function store(StoreScriptRequest $request){
         $data = $request->validated();
 
+        $data['user_id'] = $request->user()->id; 
+
         $script = Script::create($data);
 
         return new ScriptResource($script);
