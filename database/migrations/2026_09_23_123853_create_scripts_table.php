@@ -17,7 +17,7 @@ return new class extends Migration
             $table->string('topic');
             $table->text('source_text');
             $table->text('style_text')->nullable();
-            $table->text('generated_content');
+            $table->text('generated_content')->nullable()->change();
             $table->string('status')->default('pending');
             $table->string('error_message')->nullable();
             $table->timestamps();
