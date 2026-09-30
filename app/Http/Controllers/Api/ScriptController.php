@@ -6,15 +6,28 @@ use App\Http\Requests\StoreScriptRequest;
 use App\Http\Requests\UpdateScriptRequest;
 use App\Http\Resources\ScriptResource;
 use App\Models\Script;
+use Laravel\Mcp\Request;
+
 
 class ScriptController extends Controller
 {
-    public function index(){
-        $scripts = Script::all();
+
+    public function __construct()
+    {
+        $this->authorizeResource(Script::class, 'script');
+    }
+
+
+    public function index(Request $request)
+    {
+        $scripts = Script::where('user_id',
+        $request->user()->id)->get();
+
         return ScriptResource::collection($scripts);
     }
 
     public function store(StoreScriptRequest $request){
+        
         $data = $request->validated();
 
         $data['user_id'] = $request->user()->id; 
