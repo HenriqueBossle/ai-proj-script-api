@@ -188,12 +188,12 @@ Endpoint:
 POST /api/login
 ```
 
-* [ ] Validar email
-* [ ] Validar senha
-* [ ] Verificar credenciais
-* [ ] Criar token Sanctum
-* [ ] Retornar usuário e token
-* [ ] Retornar erro apropriado para credenciais inválidas
+* [x] Validar email
+* [x] Validar senha
+* [x] Verificar credenciais
+* [x] Criar token Sanctum
+* [x] Retornar usuário e token
+* [x] Retornar erro apropriado para credenciais inválidas
 
 ## Logout
 
@@ -203,18 +203,18 @@ Endpoint:
 POST /api/logout
 ```
 
-* [ ] Exigir autenticação
+* [x] Exigir autenticação
 * [ ] Revogar o token atual
-* [ ] Retornar confirmação de logout
+* [x] Retornar confirmação de logout
 
 ---
 
 # 6. Sanctum
 
-* [ ] Configurar Laravel Sanctum
-* [ ] Utilizar `auth:sanctum`
-* [ ] Proteger as rotas de scripts
-* [ ] Utilizar token Bearer nas requisições autenticadas
+* [x] Configurar Laravel Sanctum
+* [x] Utilizar `auth:sanctum`
+* [x] Proteger as rotas de scripts
+* [x] Utilizar token Bearer nas requisições autenticadas
 
 Exemplo:
 
@@ -248,8 +248,8 @@ O controller terá CRUD completo:
 GET /api/scripts
 ```
 
-* [ ] Retornar scripts do usuário autenticado
-* [ ] Não retornar scripts de outros usuários
+* [x] Retornar scripts do usuário autenticado
+* [x] Não retornar scripts de outros usuários
 * [ ] Ordenar pelos mais recentes
 
 ---
@@ -277,9 +277,9 @@ Retornar Script
 ```
 
 * [x] Validar dados com `StoreScriptRequest`
-* [ ] Associar `user_id` ao usuário autenticado
-* [ ] Criar script
-* [ ] Definir `status = pending`
+* [x] Associar `user_id` ao usuário autenticado
+* [x] Criar script
+* [x] Definir `status = pending`
 * [ ] Disparar `GenerateScriptJob`
 * [ ] Retornar resposta da API
 
@@ -291,8 +291,8 @@ Retornar Script
 GET /api/scripts/{script}
 ```
 
-* [ ] Aplicar `ScriptPolicy`
-* [ ] Permitir acesso somente ao proprietário
+* [x] Aplicar `ScriptPolicy`
+* [x] Permitir acesso somente ao proprietário
 * [ ] Retornar dados do script
 
 ---
@@ -325,12 +325,12 @@ Limpar error_message
 Dispatch GenerateScriptJob
 ```
 
-* [ ] Validar dados com `UpdateScriptRequest`
-* [ ] Verificar autorização através da Policy
-* [ ] Atualizar dados do script
+* [x] Validar dados com `UpdateScriptRequest`
+* [x] Verificar autorização através da Policy
+* [x] Atualizar dados do script
 * [ ] Limpar `content`
 * [ ] Limpar `error_message`
-* [ ] Alterar status para `pending`
+* [x] Alterar status para `pending`
 * [ ] Disparar `GenerateScriptJob`
 
 ---
@@ -341,9 +341,9 @@ Dispatch GenerateScriptJob
 DELETE /api/scripts/{script}
 ```
 
-* [ ] Aplicar `ScriptPolicy`
-* [ ] Permitir exclusão somente pelo proprietário
-* [ ] Excluir script
+* [x] Aplicar `ScriptPolicy`
+* [x] Permitir exclusão somente pelo proprietário
+* [x] Excluir script
 
 ---
 
