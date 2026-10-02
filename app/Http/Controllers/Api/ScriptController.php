@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Requests\StoreScriptRequest;
 use App\Http\Requests\UpdateScriptRequest;
 use App\Http\Resources\ScriptResource;
+use App\Jobs\GenerateScriptJob;
 use App\Models\Script;
 use Laravel\Mcp\Request;
 
@@ -33,6 +34,8 @@ class ScriptController extends Controller
         $data['user_id'] = $request->user()->id; 
 
         $script = Script::create($data);
+
+        GenerateScriptJob::dispatch($script);
 
         return new ScriptResource($script);
     }
