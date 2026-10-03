@@ -25,10 +25,10 @@ class GenerateScriptJob implements ShouldQueue
 
         try {
 
-            $content = $generator->generate($this->script);
+            $generated_content = $generator->generate($this->script);
 
             $this->script->update([
-                'content' => $content,
+                'generated_content' => $generated_content,
                 'status' => 'done',
                 'error_message' => null,
             ]);

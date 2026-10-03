@@ -38,7 +38,7 @@ return [
     'ai_provider' => [
         'ai_api_key' => env('AI_API_KEY'),
         'ai_model' => env('AI_MODEL'),
-        'ai_base_url' => env('AI_BASE_URL')
+        'ai_base_uri' => env('AI_BASE_URI')
     ]
 
 ];

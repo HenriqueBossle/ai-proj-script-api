@@ -39,6 +39,7 @@ Lembre-se:
 PROMPT;
 
         $message = ScriptGeneratorAgent::make()
+            ->setThreadId('script_' . $script->id)
             ->chat(new UserMessage($prompt))
             ->getMessage();
 

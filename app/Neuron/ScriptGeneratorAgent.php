@@ -11,7 +11,7 @@ class ScriptGeneratorAgent extends Agent
     protected function provider(): AIProviderInterface
     {
         return new OpenAILike(
-            baseUri: config('services.ai_provider.ai_base_url'),
+            baseUri: config('services.ai_provider.ai_base_uri'),
             key: config('services.ai_provider.ai_api_key'),
             model: config('services.ai_provider.ai_model'),
             parameters: [
