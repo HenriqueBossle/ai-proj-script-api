@@ -9,7 +9,6 @@ O usuário:
 1. Cria uma conta.
 2. Faz login utilizando Sanctum.
 3. Preenche um formulário com:
-
    * `topic` — ideia/tema do vídeo.
    * `source_text` — fonte de informações para o roteiro.
    * `style_text` — referência de estilo de escrita.
