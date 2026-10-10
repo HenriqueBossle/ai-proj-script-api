@@ -17,7 +17,7 @@ O usuário:
 6. O `GenerateScriptJob` chama o `ScriptGeneratorService`.
 7. O serviço envia os dados para a IA.
 8. A IA gera o roteiro utilizando **somente o `source_text` como fonte factual (grounding)**.
-9. O resultado é salvo em `content`.
+9. O resultado é salvo em `generated_content`.
 10. O usuário pode visualizar, editar/regenerar e excluir seus roteiros.
 
 ---
@@ -41,18 +41,18 @@ Utilizar a tabela padrão `users` do Laravel.
 
 ## SCRIPTS
 
-| Campo              | Tipo      | Regras             |
-| ------------------ | --------- | ------------------ |
-| `id`               | bigint    | PK                 |
-| `user_id`          | bigint    | FK → `users.id`    |
-| `topic`            | varchar   | obrigatório        |
-| `source_text`      | text      | nullable           |
-| `style_text`       | text      | nullable           |
-| `generate_content` | longtext  | nullable           |
-| `status`           | varchar   | default: `pending` |
-| `error_message`    | text      | nullable           |
-| `created_at`       | timestamp | automático         |
-| `updated_at`       | timestamp | automático         |
+| Campo               | Tipo      | Regras             |
+| ------------------- | --------- | ------------------ |
+| `id`                | bigint    | PK                 |
+| `user_id`           | bigint    | FK → `users.id`    |
+| `topic`             | varchar   | obrigatório        |
+| `source_text`       | text      | nullable           |
+| `style_text`        | text      | nullable           |
+| `generated_content` | text      | nullable           |
+| `status`            | varchar   | default: `pending` |
+| `error_message`     | text      | nullable           |
+| `created_at`        | timestamp | automático         |
+| `updated_at`        | timestamp | automático         |
 
 ### Relacionamentos
 
@@ -64,12 +64,12 @@ Script
  └── belongsTo(User)
 ```
 
-* [ ] Criar migration `scripts`
-* [ ] Criar foreign key `user_id`
-* [ ] Configurar `onDelete('cascade')`
-* [ ] Criar model `Script`
-* [ ] Configurar relacionamento `User::scripts()`
-* [ ] Configurar relacionamento `Script::user()`
+* [x] Criar migration `scripts`
+* [x] Criar foreign key `user_id`
+* [x] Configurar `onDelete('cascade')`
+* [x] Criar model `Script`
+* [x] Configurar relacionamento `User::scripts()`
+* [x] Configurar relacionamento `Script::user()`
 
 ---
 
@@ -145,7 +145,7 @@ OpenAI API
      ↓
 Script
      ↓
-content + status
+generated_content + status
 ```
 
 ---
@@ -172,12 +172,12 @@ Endpoint:
 POST /api/register
 ```
 
-* [ ] Validar nome
-* [ ] Validar email
-* [ ] Validar senha
-* [ ] Criar usuário
-* [ ] Gerar token Sanctum
-* [ ] Retornar usuário e token
+* [x] Validar nome
+* [x] Validar email
+* [x] Validar senha
+* [x] Criar usuário
+* [x] Gerar token Sanctum
+* [x] Retornar usuário e token
 
 ## Login
 
@@ -203,7 +203,7 @@ POST /api/logout
 ```
 
 * [x] Exigir autenticação
-* [ ] Revogar o token atual
+* [x] Revogar o token atual
 * [x] Retornar confirmação de logout
 
 ---
@@ -249,7 +249,7 @@ GET /api/scripts
 
 * [x] Retornar scripts do usuário autenticado
 * [x] Não retornar scripts de outros usuários
-* [ ] Ordenar pelos mais recentes
+* [ ] Ordenar pelos mais recentes — não implementado.
 
 ---
 
@@ -279,8 +279,8 @@ Retornar Script
 * [x] Associar `user_id` ao usuário autenticado
 * [x] Criar script
 * [x] Definir `status = pending`
-* [ ] Disparar `GenerateScriptJob`
-* [ ] Retornar resposta da API
+* [x] Disparar `GenerateScriptJob`
+* [x] Retornar resposta da API
 
 ---
 
@@ -292,7 +292,7 @@ GET /api/scripts/{script}
 
 * [x] Aplicar `ScriptPolicy`
 * [x] Permitir acesso somente ao proprietário
-* [ ] Retornar dados do script
+* [x] Retornar dados do script
 
 ---
 
@@ -315,7 +315,7 @@ Policy
    ↓
 Atualizar topic/source_text/style_text
    ↓
-Limpar content
+Limpar generated_content
    ↓
 status = pending
    ↓
@@ -327,7 +327,7 @@ Dispatch GenerateScriptJob
 * [x] Validar dados com `UpdateScriptRequest`
 * [x] Verificar autorização através da Policy
 * [x] Atualizar dados do script
-* [ ] Limpar `content`
+* [ ] Limpar `generated_content`
 * [ ] Limpar `error_message`
 * [x] Alterar status para `pending`
 * [ ] Disparar `GenerateScriptJob`
@@ -388,15 +388,15 @@ error_message
 
 ## Implementação
 
-* [ ] Receber o `Script`
-* [ ] Alterar status para `processing`
-* [ ] Chamar `ScriptGeneratorService`
-* [ ] Receber roteiro gerado
-* [ ] Salvar resultado em `content`
-* [ ] Alterar status para `done`
-* [ ] Capturar exceções
-* [ ] Alterar status para `failed`
-* [ ] Salvar `error_message`
+* [x] Receber o `Script`
+* [x] Alterar status para `processing`
+* [x] Chamar `ScriptGeneratorService`
+* [x] Receber roteiro gerado
+* [x] Salvar resultado em `generated_content`.
+* [x] Alterar status para `done`
+* [x] Capturar exceções
+* [x] Alterar status para `failed`
+* [x] Salvar `error_message` (sem sanitização comprovada de dados sensíveis).
 
 ---
 
@@ -404,7 +404,7 @@ error_message
 
 A geração será processada através de Job.
 
-* [ ] Configurar driver de queue
+* [x] Configurar driver de queue (padrão `database`; depende do ambiente).
 * [ ] Configurar worker
 * [ ] Testar processamento assíncrono
 * [ ] Configurar tentativas do Job
@@ -451,13 +451,13 @@ O `GenerateScriptJob` não deve implementar diretamente a comunicação com a IA
 
 O MVP utilizará uma API compatível com o modelo utilizado no projeto.
 
-* [ ] Configurar API Key através do `.env`
-* [ ] Criar configuração da API
-* [ ] Não armazenar API Key no código
-* [ ] Implementar chamada HTTP
-* [ ] Processar resposta da IA
-* [ ] Tratar erros da API
-* [ ] Retornar somente o conteúdo do roteiro
+* [x] Configurar API Key através do `.env` (configuração lê `AI_API_KEY`).
+* [x] Criar configuração da API (`config/services.php`, chave `ai_provider`).
+* [x] Não armazenar API Key no código (nenhuma chave literal encontrada nos arquivos de configuração revisados).
+* [x] Implementar comunicação com o provedor via NeuronAI/OpenAILike (não via Laravel HTTP Client).
+* [x] Processar resposta da IA
+* [x] Tratar erros da API (job marca falha e relança a exceção).
+* [x] Retornar somente o conteúdo do roteiro
 
 ---
 
@@ -483,12 +483,12 @@ Define a forma de escrita
 
 A IA deve ser instruída a:
 
-* [ ] Utilizar o `source_text` como fonte das informações
-* [ ] Não inventar fatos que não estejam presentes na fonte
-* [ ] Não adicionar informações externas como fatos
-* [ ] Utilizar `topic` para entender o objetivo do roteiro
-* [ ] Utilizar `style_text` como referência de estilo
-* [ ] Produzir um roteiro coerente com os dados fornecidos
+* [x] Utilizar o `source_text` como fonte das informações
+* [x] Não inventar fatos que não estejam presentes na fonte
+* [x] Não adicionar informações externas como fatos
+* [x] Utilizar `topic` para entender o objetivo do roteiro
+* [x] Utilizar `style_text` como referência de estilo
+* [x] Produzir um roteiro coerente com os dados fornecidos
 
 ### Regra principal
 
@@ -521,10 +521,10 @@ OPENAI_BASE_URL=
 OPENAI_MODEL=
 ```
 
-* [ ] Criar configuração em `config/services.php`
-* [ ] Ler API Key através do `.env`
-* [ ] Definir modelo através de configuração
-* [ ] Evitar valores sensíveis diretamente no código
+* [x] Criar configuração em `config/services.php` (configuração `ai_provider`).
+* [x] Ler API Key através do `.env` (variável `AI_API_KEY`).
+* [x] Definir modelo através de configuração (`AI_MODEL`).
+* [x] Evitar valores sensíveis diretamente no código (a configuração lê `AI_API_KEY` do ambiente).
 
 ---
 
@@ -548,15 +548,15 @@ style_text
 
 ### Regras
 
-* [ ] `topic` obrigatório
-* [ ] `topic` deve ser string
-* [ ] `topic` máximo de 20.000 caracteres
-* [ ] `source_text` opcional
-* [ ] `source_text` deve ser string quando informado
-* [ ] `source_text` máximo de 20.000 caracteres
-* [ ] `style_text` opcional
-* [ ] `style_text` deve ser string quando informado
-* [ ] `style_text` máximo de 20.000 caracteres
+* [x] `topic` obrigatório
+* [x] `topic` deve ser string
+* [ ] `topic` máximo de 20.000 caracteres — código limita a 255 caracteres.
+* [x] `source_text` opcional
+* [x] `source_text` deve ser string quando informado
+* [ ] `source_text` máximo de 20.000 caracteres — limite não configurado.
+* [x] `style_text` opcional
+* [x] `style_text` deve ser string quando informado
+* [ ] `style_text` máximo de 20.000 caracteres — limite não configurado.
 
 ### Mensagens
 
@@ -582,12 +582,12 @@ app/Http/Requests/UpdateScriptRequest.php
 
 Responsável pela validação da atualização.
 
-* [ ] Validar `topic`
-* [ ] Validar `source_text`
-* [ ] Validar `style_text`
-* [ ] Limite de 20.000 caracteres
-* [ ] Mensagens em pt-BR
-* [ ] Permitir atualização dos dados utilizados para nova geração
+* [x] Validar `topic`
+* [x] Validar `source_text`
+* [x] Validar `style_text`
+* [ ] Limite de 20.000 caracteres — não configurado nas regras atuais.
+* [ ] Mensagens em pt-BR — mensagens específicas não definidas nos Form Requests.
+* [ ] Completar atualização e regeneração (o controller atualiza os dados, mas não limpa o conteúdo nem despacha nova geração).
 
 ---
 
@@ -611,11 +611,11 @@ User.id === Script.user_id
 
 Implementar:
 
-* [ ] `viewAny()`
-* [ ] `view()`
-* [ ] `create()`
-* [ ] `update()`
-* [ ] `delete()`
+* [x] `viewAny()`
+* [x] `view()`
+* [x] `create()`
+* [x] `update()`
+* [x] `delete()`
 
 Regra principal:
 
@@ -650,7 +650,7 @@ Exemplo:
     "topic": "A história dos buracos negros",
     "source_text": "...",
     "style_text": "...",
-    "content": "...",
+    "generated_content": "...",
     "status": "done",
     "error_message": null,
     "created_at": "...",
@@ -734,7 +734,7 @@ OpenAI API
    ↓
 Roteiro gerado
    ↓
-content = roteiro
+generated_content = roteiro
    ↓
 status = done
 ```
@@ -764,7 +764,7 @@ ScriptPolicy
    ↓
 Atualiza topic/source_text/style_text
    ↓
-content = null
+generated_content = null
    ↓
 status = pending
    ↓
@@ -815,7 +815,7 @@ Opcional — máximo 20.000 caracteres
 
 * [ ] Mostrar `topic`
 * [ ] Mostrar `status`
-* [ ] Mostrar `content`
+* [ ] Mostrar `generated_content`
 * [ ] Mostrar `error_message` quando houver
 * [ ] Mostrar estado de processamento
 
@@ -875,15 +875,15 @@ Não foi possível gerar o roteiro.
 * [ ] `topic` obrigatório
 * [ ] `source_text` opcional
 * [ ] `style_text` opcional
-* [ ] Limite de 20.000 caracteres
-* [ ] Mensagens em pt-BR
+* [ ] Limite de 20.000 caracteres — não configurado nas regras atuais.
+* [ ] Mensagens em pt-BR — mensagens específicas não definidas nos Form Requests.
 
 ## Job
 
 * [ ] Script começa como `pending`
 * [ ] Job altera para `processing`
 * [ ] Sucesso altera para `done`
-* [ ] Resultado é salvo em `content`
+* [ ] Resultado é salvo em `generated_content`
 * [ ] Erro altera para `failed`
 * [ ] Erro é salvo em `error_message`
 
@@ -947,7 +947,7 @@ O MVP estará concluído quando o seguinte fluxo funcionar:
        ↓           ↓
      SUCESSO      ERRO
        ↓           ↓
-    content      failed
+    generated_content      failed
        ↓        error_message
      done
        ↓

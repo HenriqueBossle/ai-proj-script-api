@@ -206,7 +206,7 @@ user_id
 topic
 source_text
 style_text
-generate_content
+generated_content
 status
 error_message
 created_at
@@ -218,16 +218,10 @@ updated_at
 O campo definido no banco é:
 
 ```text
-generate_content
+generated_content
 ```
 
-Caso o projeto decida utilizar:
-
-```text
-content
-```
-
-como nome do atributo público da API, isso deve ser tratado conscientemente através do Resource ou de uma alteração explícita de schema.
+O atributo público da API também utiliza `generated_content`, conforme o `ScriptResource`.
 
 Não alterar nomes de banco automaticamente sem necessidade.
 
@@ -468,7 +462,7 @@ GenerateScriptJob
 Portanto, ao atualizar um script:
 
 ```text
-content = null
+generated_content = null
 status = pending
 error_message = null
 ```
@@ -782,7 +776,7 @@ Estrutura esperada:
     "topic": "A história dos buracos negros",
     "source_text": "...",
     "style_text": "...",
-    "content": "...",
+    "generated_content": "...",
     "status": "done",
     "error_message": null,
     "created_at": "...",
@@ -953,7 +947,7 @@ user_id
 topic
 source_text
 style_text
-generate_content
+generated_content
 status
 error_message
 timestamps
@@ -1311,7 +1305,7 @@ SUCESSO        ERRO
 ↓               ↓
 done           failed
 │               │
-content        error_message
+generated_content error_message
 │
 ↓
 Usuário visualiza o roteiro
@@ -1366,3 +1360,31 @@ Contexto atual da aplicação
 ```
 
 O agente deve preservar os três níveis e evitar mudanças que contradigam os requisitos do MVP.
+
+
+---
+
+# 42. Situação da implementação (auditoria estática)
+
+Esta seção registra o que foi encontrado no repositório em 10/10/2026. Ela complementa as regras arquiteturais acima; não substitui os requisitos do MVP. A verificação foi feita pela leitura dos arquivos, sem executar a aplicação ou os testes.
+
+## Implementado no código
+
+- API de cadastro, login e logout com token Sanctum e rotas de scripts protegidas por `auth:sanctum`.
+- Form Request de cadastro, CRUD de scripts, Policy, Resource e relacionamentos entre `User` e `Script`.
+- Criação do script despacha `GenerateScriptJob`; o Job atualiza os estados `processing`, `done` e `failed` e chama `ScriptGeneratorService`.
+- Serviço e agente de IA com instruções de grounding, separação entre assunto, fonte factual e estilo, e orientação para tratar textos fornecidos como dados.
+- Configuração do provedor de IA por variáveis de ambiente em `config/services.php` (nomes atuais: `AI_API_KEY`, `AI_BASE_URI`, `AI_MODEL`).
+
+## Pendências e divergências encontradas
+
+- A migration, o model, o Job, o Resource e esta documentação usam `generated_content` para o roteiro gerado.
+- A migration inicial declara `source_text` não nulo e usa `text()->change()` durante a criação; outra migration torna `generated_content` não nulo. O `source_text` e o `generated_content` não seguem a nulabilidade prevista para o MVP.
+- `update()` não limpa o conteúdo nem o erro, não redefine o estado para `pending` e não despacha outro Job.
+- `index()` filtra pelo usuário, mas não ordena os scripts por data mais recente.
+- Requests de scripts limitam `topic` a 255 caracteres e não impõem o limite de 20.000 caracteres aos campos. Não foram encontradas mensagens específicas de validação em pt-BR nesses Requests.
+- O Job persiste diretamente a mensagem da exceção em `error_message`; não há sanitização visível para remover credenciais ou outros dados sensíveis.
+- Há testes padrão de autenticação web, mas não foram encontrados testes específicos da API de scripts, autorização, validação dos roteiros ou Job/serviço de IA.
+- Não há front-end neste repositório. A configuração da fila existe e usa `database` como padrão, mas worker, execução assíncrona e comportamento em ambiente não foram verificados.
+
+Consulte `TASKS.md` para o checklist detalhado de requisitos atendidos e pendentes.

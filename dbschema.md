@@ -18,7 +18,7 @@ erDiagram
         varchar topic "obrigatório — ideia do vídeo"
         text source_text "nullable — fonte de fatos"
         text style_text "nullable — referência de estilo"
-        longtext content "nullable — roteiro gerado"
+        longtext generated_content "nullable — roteiro gerado"
         varchar status "default: pending"
         text error_message "nullable"
         timestamp created_at
