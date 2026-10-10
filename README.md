@@ -159,12 +159,3 @@ A aplicação usa a tabela padrão `users` e a tabela de domínio `scripts`. O s
 - Há divergência entre a nulabilidade esperada e as migrations atuais: `source_text` é criado sem `nullable()`, e uma migration posterior torna `generated_content` obrigatório. Revise as migrations conforme os dados que o cliente pode omitir antes de preparar um banco novo.
 - A autenticação da API e o CRUD de scripts estão definidos em `routes/api.php`; os testes existentes no repositório são principalmente os testes padrão de autenticação web.
 
-## Testes
-
-Para executar a suíte Laravel:
-
-```bash
-php artisan test
-```
-
-A configuração PHPUnit usa SQLite em memória e define a fila como `sync` durante os testes.
