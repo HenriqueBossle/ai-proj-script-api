@@ -1,58 +1,170 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# API de geração de roteiros com IA
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+API Laravel para cadastro de usuários e criação de roteiros. A geração é solicitada por um Job de fila e a integração com o provedor de IA fica no `ScriptGeneratorService`, usando NeuronAI e um endpoint compatível com a API da OpenAI.
 
-## About Laravel
+A IA recebe três entradas com funções diferentes:
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+- `topic`: assunto e objetivo do roteiro.
+- `source_text`: fonte factual autorizada.
+- `style_text`: referência de estilo, sem servir como fonte de fatos.
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+O resultado é persistido e exposto pela API no campo `generated_content`.
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+## Requisitos
 
-## Learning Laravel
+- PHP 8.3 ou superior
+- Composer
+- Um banco configurado pelo Laravel (SQLite é o padrão no `.env.example`)
+- Um provedor de IA compatível com OpenAI configurado para o agente
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework.
+## Instalação local
 
-In addition, [Laracasts](https://laracasts.com) contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
-
-You can also watch bite-sized lessons with real-world projects on [Laravel Learn](https://laravel.com/learn), where you will be guided through building a Laravel application from scratch while learning PHP fundamentals.
-
-## Agentic Development
-
-Laravel's predictable structure and conventions make it ideal for AI coding agents like Claude Code, Cursor, and GitHub Copilot. Install [Laravel Boost](https://laravel.com/docs/ai) to supercharge your AI workflow:
+Na raiz do projeto:
 
 ```bash
-composer require laravel/boost --dev
-
-php artisan boost:install
+composer install
+cp .env.example .env
+php artisan key:generate
 ```
 
-Boost provides your agent 15+ tools and skills that help agents build Laravel applications while following best practices.
+Configure o banco no `.env`. Para SQLite, crie o arquivo se ainda não existir:
 
-## Contributing
+```bash
+touch database/database.sqlite
+```
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+Configure as credenciais do provedor de IA no mesmo arquivo:
 
-## Code of Conduct
+```dotenv
+AI_API_KEY=sua-chave
+AI_BASE_URI=https://seu-provedor/v1
+AI_MODEL=nome-do-modelo
+```
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+Esses valores são lidos por `config/services.php`. Não coloque chaves reais no código ou em arquivos versionados.
 
-## Security Vulnerabilities
+Depois, execute as migrations:
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+```bash
+php artisan migrate
+```
 
-## License
+Inicie a API:
 
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+```bash
+php artisan serve
+```
+
+Por padrão, ela estará disponível em `http://127.0.0.1:8000`.
+
+## Processamento da fila
+
+A configuração padrão usa a fila `database`. Em outro terminal, inicie o worker:
+
+```bash
+php artisan queue:work
+```
+
+A criação do roteiro despacha `GenerateScriptJob`. O Job atualiza o status, chama o serviço de geração e salva o resultado ou o erro. Para processar a geração de forma assíncrona, mantenha o worker em execução e use `QUEUE_CONNECTION=database`.
+
+## Autenticação
+
+As rotas de cadastro e login retornam um token Sanctum. Envie esse token nas rotas protegidas:
+
+```http
+Authorization: Bearer SEU_TOKEN
+Accept: application/json
+```
+
+### Cadastro
+
+`POST /api/register`
+
+```json
+{
+  "name": "Ana",
+  "email": "ana@example.com",
+  "password": "senha-segura",
+  "password_confirmation": "senha-segura",
+  "device_name": "meu-app"
+}
+```
+
+O cadastro retorna HTTP `201`, com `token` e `user`.
+
+### Login
+
+`POST /api/login`
+
+```json
+{
+  "email": "ana@example.com",
+  "password": "senha-segura",
+  "device_name": "meu-app"
+}
+```
+
+`device_name` é obrigatório no login atual. O endpoint retorna o token e os dados do usuário. Credenciais inválidas retornam erro de validação.
+
+### Logout
+
+`POST /api/logout` — requer autenticação. Revoga o token atual.
+
+## Rotas de scripts
+
+Todas as rotas abaixo exigem token Sanctum.
+
+| Método | Rota | Ação |
+| --- | --- | --- |
+| `GET` | `/api/scripts` | Lista scripts do usuário autenticado |
+| `POST` | `/api/scripts` | Cria um script e despacha a geração |
+| `GET` | `/api/scripts/{script}` | Exibe um script próprio |
+| `PUT` / `PATCH` | `/api/scripts/{script}` | Atualiza os campos enviados |
+| `DELETE` | `/api/scripts/{script}` | Exclui um script próprio |
+
+### Criar script
+
+`POST /api/scripts`
+
+```json
+{
+  "topic": "Uma apresentação sobre o tema",
+  "source_text": "Texto com os fatos que podem ser usados no roteiro.",
+  "style_text": "Exemplo de estilo de escrita."
+}
+```
+
+`source_text` e `style_text` são opcionais segundo as regras do request. A resposta usa `ScriptResource` e contém os campos do script, incluindo `generated_content`, `status` e `error_message`.
+
+### Status de geração
+
+Os estados usados pelo Job são:
+
+- `pending`: aguardando processamento
+- `processing`: geração em andamento
+- `done`: geração concluída
+- `failed`: ocorreu uma falha; consulte `error_message`
+
+Consulte `GET /api/scripts/{script}` para acompanhar o estado.
+
+## Modelo de dados
+
+A aplicação usa a tabela padrão `users` e a tabela de domínio `scripts`. O script inclui `user_id`, `topic`, `source_text`, `style_text`, `generated_content`, `status` e `error_message`. As Policies restringem visualização, atualização e exclusão ao proprietário.
+
+## Limitações conhecidas do estado atual
+
+- O método `update()` atualiza os campos enviados, mas ainda não limpa `generated_content`, redefine o status nem despacha uma nova geração.
+- `index()` filtra pelo usuário autenticado, mas ainda não ordena os resultados por data.
+- As validações de texto não aplicam o limite de 20.000 caracteres descrito nos requisitos do MVP; `topic` está limitado a 255 caracteres.
+- Há divergência entre a nulabilidade esperada e as migrations atuais: `source_text` é criado sem `nullable()`, e uma migration posterior torna `generated_content` obrigatório. Revise as migrations conforme os dados que o cliente pode omitir antes de preparar um banco novo.
+- A autenticação da API e o CRUD de scripts estão definidos em `routes/api.php`; os testes existentes no repositório são principalmente os testes padrão de autenticação web.
+
+## Testes
+
+Para executar a suíte Laravel:
+
+```bash
+php artisan test
+```
+
+A configuração PHPUnit usa SQLite em memória e define a fila como `sync` durante os testes.
