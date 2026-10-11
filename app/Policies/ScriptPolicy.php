@@ -11,7 +11,7 @@ class ScriptPolicy
      * Create a new policy instance.
      */
     
-    public function viewAny(User $user): bool
+    public function viewAny(): bool
     {
         return true;
     }
@@ -22,7 +22,7 @@ class ScriptPolicy
 
     }
 
-    public function create(User $user): bool
+    public function create(): bool
     {
         return true;
     }
@@ -30,7 +30,6 @@ class ScriptPolicy
     public function update(User $user, Script $script): bool
     {
         return $user->id === $script->user_id;
-
     }
 
     public function delete(User $user, Script $script): bool
