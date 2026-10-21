@@ -134,7 +134,7 @@ Todas as rotas abaixo exigem token Sanctum.
 }
 ```
 
-`source_text` e `style_text` são opcionais segundo as regras do request. A resposta usa `ScriptResource` e contém os campos do script, incluindo `generated_content`, `status` e `error_message`.
+`source_text` é obrigatorio e `style_text` é opcionail segundo as regras do request. A resposta usa `ScriptResource` e contém os campos do script, incluindo `generated_content`, `status` e `error_message`.
 
 ### Status de geração
 

@@ -510,17 +510,16 @@ SOURCE OF TRUTH = source_text
 
 ---
 
-# 16. Ausência de source_text
+16. Obrigatoriedade de source_text
 
-`source_text` é opcional segundo o MVP.
-
-Quando estiver ausente, o comportamento deve ser definido explicitamente pelo serviço/prompt.
-
-O agente não deve simplesmente ignorar a regra de grounding.
-
-Se o requisito do produto for manter grounding estrito, uma geração sem fonte factual deve produzir uma resposta que não invente fatos.
-
-Não adicionar automaticamente uma pesquisa na internet, scraping ou outra fonte externa.
+source_text é obrigatório para toda geração com grounding.
+Regras para o agente:
+Sem exceção de opicionalidade: o MVP não se aplica aqui — não tratar source_text como campo opcional. Se estiver ausente, vazio ou inválido, a geração não prossegue com conteúdo factual normal.
+Nunca inventar fatos: uma geração sem fonte factual válida deve produzir uma resposta que não afirme nada factual novo. O agente deve:
+sinalizar explicitamente a ausência da fonte;
+responder apenas com o que é inferível do contexto fornecido (ou pedir a fonte), sem preencher lacunas com conhecimento não verificado.
+Sem fontes externas automáticas: não é permitido adicionar automaticamente pesquisa na internet, scraping ou qualquer outra fonte externa para compensar a ausência de source_text. Qualquer inclusão de fonte externa exige instrução explícita do usuário ou do sistema.
+Falha explícita: quando source_text estiver ausente, o comportamento deve ser definido e visível — o agente deve declarar que não pode gerar resposta factual fundamentada, em vez de produzir uma resposta aparentemente normal.
 
 ---
 
