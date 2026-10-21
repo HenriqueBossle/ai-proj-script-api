@@ -46,7 +46,7 @@ Utilizar a tabela padrão `users` do Laravel.
 | `id`                | bigint    | PK                 |
 | `user_id`           | bigint    | FK → `users.id`    |
 | `topic`             | varchar   | obrigatório        |
-| `source_text`       | text      | nullable           |
+| `source_text`       | text      | obrigatório        |
 | `style_text`        | text      | nullable           |
 | `generated_content` | text      | nullable           |
 | `status`            | varchar   | default: `pending` |
@@ -551,7 +551,7 @@ style_text
 * [x] `topic` obrigatório
 * [x] `topic` deve ser string
 * [ ] `topic` máximo de 20.000 caracteres — código limita a 255 caracteres.
-* [x] `source_text` opcional
+* [x] `source_text` obrigatório
 * [x] `source_text` deve ser string quando informado
 * [ ] `source_text` máximo de 20.000 caracteres — limite não configurado.
 * [x] `style_text` opcional
@@ -648,7 +648,7 @@ Exemplo:
     "id": 1,
     "user_id": 1,
     "topic": "A história dos buracos negros",
-    "source_text": "...",
+    "source_text": "Fontes da historia dos buracos negros",
     "style_text": "...",
     "generated_content": "...",
     "status": "done",
@@ -802,7 +802,7 @@ Tema do vídeo
 
 Fonte de informações
 [____________________________]
-Opcional — máximo 20.000 caracteres
+Origatorio — máximo 20.000 caracteres
 
 Estilo de escrita
 [____________________________]
@@ -873,7 +873,7 @@ Não foi possível gerar o roteiro.
 ## Validação
 
 * [ ] `topic` obrigatório
-* [ ] `source_text` opcional
+* [ ] `source_text` obrigatorio
 * [ ] `style_text` opcional
 * [ ] Limite de 20.000 caracteres — não configurado nas regras atuais.
 * [ ] Mensagens em pt-BR — mensagens específicas não definidas nos Form Requests.
