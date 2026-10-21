@@ -7,7 +7,7 @@ use App\Http\Requests\UpdateScriptRequest;
 use App\Http\Resources\ScriptResource;
 use App\Jobs\GenerateScriptJob;
 use App\Models\Script;
-use Laravel\Mcp\Request;
+use Illuminate\Http\Request;
 
 
 class ScriptController extends Controller
@@ -21,35 +21,50 @@ class ScriptController extends Controller
 
     public function index(Request $request)
     {
-        $scripts = Script::where('user_id',
-        $request->user()->id)->get();
+        $scripts = $request->user()->scripts()->latest()->get();
 
         return ScriptResource::collection($scripts);
     }
 
-    public function store(StoreScriptRequest $request){
-        
+    public function store(StoreScriptRequest $request)
+    {
         $data = $request->validated();
 
-        $data['user_id'] = $request->user()->id; 
+        $data['user_id'] = $request->user()->id;
 
         $script = Script::create($data);
 
         GenerateScriptJob::dispatch($script);
 
-        return new ScriptResource($script);
+        return new ScriptResource($script->refresh());
     }
 
     public function show(Script $script)
     {
-        return new ScriptResource($script);   
+        return new ScriptResource($script);
     }
 
-    public function update(UpdateScriptRequest $request, Script $script){
-        $data = $request->validated();
+    public function update(UpdateScriptRequest $request, Script $script)
+    {
+        if ($script->status === 'processing') {
+            return response()->json([
+                'message' => 'O roteiro está sendo gerado. Aguarde a conclusão para atualizar.',
+            ], 409);
+        }
 
-        $script->update($data);
-        return new ScriptResource($script);
+        $script->fill($request->validated());
+
+        $script->forceFill([
+            'generated_content' => null,
+            'error_message'     => null,
+            'status'            => 'pending',
+        ]);
+
+        $script->save();
+
+        GenerateScriptJob::dispatch($script);
+
+        return new ScriptResource($script->refresh());
     }
 
     public function destroy(Script $script)
