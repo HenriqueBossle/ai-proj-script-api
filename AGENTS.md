@@ -17,10 +17,11 @@ O sistema permite que usuários:
 4. Solicitem a geração de um roteiro.
 5. Acompanhem o status da geração.
 6. Visualizem o roteiro gerado.
-7. Atualizem os dados e solicitem uma nova geração.
+7. Atualizem os metadados para solicitar uma nova geração, ou revisem o conteúdo existente com uma instrução contextual.
 8. Excluam seus próprios roteiros.
 
-A geração do roteiro deve ocorrer através de uma Queue e de um `GenerateScriptJob`.
+A geração inicial deve ocorrer através de uma Queue e de um `GenerateScriptJob`.
+A revisão contextual deve ocorrer através de `ReviseScriptJob`, sem substituir o conteúdo atual até a nova versão ser concluída.
 
 A comunicação com a IA deve ser centralizada no `ScriptGeneratorService`.
 
@@ -110,10 +111,13 @@ Responsabilidades:
 | ------------------------ | ------------------------------------ |
 | `AuthController`         | Cadastro, login e logout             |
 | `ScriptController`       | CRUD de scripts                      |
-| `GenerateScriptJob`      | Processamento assíncrono             |
+| `GenerateScriptJob`      | Processamento assíncrono da geração inicial |
+| `ReviseScriptJob`        | Revisão assíncrona do roteiro existente |
+| `ScriptGenerationJob`    | Ciclo compartilhado de sucesso e erro dos jobs |
 | `ScriptGeneratorService` | Comunicação com a IA                 |
 | `StoreScriptRequest`     | Validação da criação                 |
 | `UpdateScriptRequest`    | Validação da atualização             |
+| `ReviseScriptRequest`    | Validação da instrução de revisão    |
 | `ScriptPolicy`           | Autorização                          |
 | `ScriptResource`         | Formatação da resposta               |
 | `Script`                 | Modelo e persistência                |
@@ -425,19 +429,24 @@ em `error_message`.
 
 ---
 
-# 14. Regeneração
+# 14. Atualização e revisão contextual
 
-O `update()` não representa apenas uma edição comum.
+Há dois fluxos distintos para alteração de um roteiro.
 
-No MVP, atualizar:
+## Atualização de metadados e nova geração
+
+O `update()` atualiza os dados de entrada e solicita uma nova geração baseada
+nesses dados. Não é o endpoint para editar um trecho usando o roteiro atual como
+contexto. Ao atualizar:
 
 ```text
 topic
 source_text
 style_text
+generated_content = null
+status = pending
+error_message = null
 ```
-
-deve solicitar uma nova geração.
 
 Fluxo:
 
@@ -450,24 +459,50 @@ Policy
         ↓
 Atualizar dados
         ↓
-Limpar conteúdo
+Limpar generated_content e error_message
         ↓
 status = pending
-        ↓
-error_message = null
         ↓
 GenerateScriptJob
 ```
 
-Portanto, ao atualizar um script:
+Não permitir atualização quando o script estiver em `processing`; retornar
+HTTP `409`. A alteração e a checagem de estado devem ser protegidas contra
+concorrência.
 
-```text
-generated_content = null
-status = pending
-error_message = null
+## Revisão contextual
+
+Usar uma rota e um Form Request próprios:
+
+```http
+POST /api/scripts/{script}/revise
 ```
 
-e o Job deve ser despachado novamente.
+Payload:
+
+```json
+{
+  "instruction": "Melhore a introdução sem alterar os fatos."
+}
+```
+
+`instruction` é obrigatório, string e limitado a 20.000 caracteres. Aplicar a
+Policy de proprietário existente. A revisão só pode começar se houver conteúdo
+gerado e se o script não estiver em `processing`; caso contrário, responder
+HTTP `409`.
+
+O controller deve mudar o estado para `processing` de forma atômica antes de
+despachar `ReviseScriptJob`. Não limpar `generated_content`: ele deve permanecer
+disponível durante o processamento e em qualquer falha. O job utiliza
+`ScriptGeneratorService` para enviar à IA o conteúdo anterior, a instrução,
+`topic`, `source_text` e `style_text`. A IA retorna o roteiro completo
+revisado. Substituir `generated_content` somente após sucesso; então marcar
+`done` e limpar `error_message`. Em erro da IA ou falha definitiva da fila,
+marcar `failed`, persistir mensagem sanitizada e manter a versão anterior.
+
+A geração inicial e a revisão devem compartilhar o tratamento de estados,
+exceções e sanitização através de `ScriptGenerationJob`, sem duplicar o ciclo
+de execução nem misturar a instrução de revisão na edição de metadados.
 
 ---
 
@@ -884,6 +919,7 @@ GET    /api/scripts/{script}
 PUT    /api/scripts/{script}
 PATCH  /api/scripts/{script}
 DELETE /api/scripts/{script}
+POST   /api/scripts/{script}/revise
 ```
 
 Estrutura esperada:
@@ -895,6 +931,7 @@ Route::post('/login', [AuthController::class, 'login']);
 Route::middleware('auth:sanctum')->group(function () {
     Route::post('/logout', [AuthController::class, 'logout']);
 
+    Route::post('/scripts/{script}/revise', [ScriptController::class, 'revise']);
     Route::apiResource('scripts', ScriptController::class);
 });
 ```
@@ -1060,6 +1097,11 @@ Tentar novamente
 ```
 
 A nova tentativa deve respeitar o fluxo de geração definido pelo backend.
+
+Para revisão contextual, a interface deve enviar `instruction` a
+`POST /api/scripts/{script}/revise`. Enquanto `status` for `processing`, manter
+visível o conteúdo anterior; ao consultar `done`, exibir a nova versão. Se
+falhar, continuar exibindo o conteúdo anterior junto da mensagem de erro.
 
 ---
 
@@ -1313,7 +1355,9 @@ Usuário visualiza o roteiro
 Além disso:
 
 * o usuário só acessa seus próprios scripts;
-* atualização dispara nova geração;
+* atualização de metadados dispara nova geração;
+* revisão contextual usa `POST /api/scripts/{script}/revise` e preserva o texto anterior até sucesso;
+* revisões simultâneas do mesmo script são recusadas com HTTP `409`;
 * exclusão funciona;
 * validações funcionam;
 * mensagens estão em pt-BR;
@@ -1363,27 +1407,20 @@ O agente deve preservar os três níveis e evitar mudanças que contradigam os r
 
 ---
 
-# 42. Situação da implementação (auditoria estática)
+# 42. Situação da implementação
 
-Esta seção registra o que foi encontrado no repositório em 10/10/2026. Ela complementa as regras arquiteturais acima; não substitui os requisitos do MVP. A verificação foi feita pela leitura dos arquivos, sem executar a aplicação ou os testes.
+O backend implementa geração inicial e revisão contextual assíncronas. A revisão
+usa `POST /api/scripts/{script}/revise`, `ReviseScriptRequest` e
+`ReviseScriptJob`; o roteiro anterior permanece em `generated_content` até a
+revisão ser concluída com sucesso. A geração inicial e a revisão compartilham
+tratamento de sucesso, falha e sanitização através de `ScriptGenerationJob`.
 
-## Implementado no código
+Os testes da API e dos jobs cobrem autorização, validação, estado de
+processamento, preservação do conteúdo em caso de falha e conclusão bem-sucedida.
 
-- API de cadastro, login e logout com token Sanctum e rotas de scripts protegidas por `auth:sanctum`.
-- Form Request de cadastro, CRUD de scripts, Policy, Resource e relacionamentos entre `User` e `Script`.
-- Criação do script despacha `GenerateScriptJob`; o Job atualiza os estados `processing`, `done` e `failed` e chama `ScriptGeneratorService`.
-- Serviço e agente de IA com instruções de grounding, separação entre assunto, fonte factual e estilo, e orientação para tratar textos fornecidos como dados.
-- Configuração do provedor de IA por variáveis de ambiente em `config/services.php` (nomes atuais: `AI_API_KEY`, `AI_BASE_URI`, `AI_MODEL`).
+Este repositório não contém a interface React. O worker deve ser executado no
+ambiente de implantação para processar os jobs; o uso e a disponibilidade do
+worker em produção não são garantidos pelo código da API.
 
-## Pendências e divergências encontradas
-
-- A migration, o model, o Job, o Resource e esta documentação usam `generated_content` para o roteiro gerado.
-- A migration inicial declara `source_text` não nulo e usa `text()->change()` durante a criação; outra migration torna `generated_content` não nulo. O `source_text` e o `generated_content` não seguem a nulabilidade prevista para o MVP.
-- `update()` não limpa o conteúdo nem o erro, não redefine o estado para `pending` e não despacha outro Job.
-- `index()` filtra pelo usuário, mas não ordena os scripts por data mais recente.
-- Requests de scripts limitam `topic` a 255 caracteres e não impõem o limite de 20.000 caracteres aos campos. Não foram encontradas mensagens específicas de validação em pt-BR nesses Requests.
-- O Job persiste diretamente a mensagem da exceção em `error_message`; não há sanitização visível para remover credenciais ou outros dados sensíveis.
-- Há testes padrão de autenticação web, mas não foram encontrados testes específicos da API de scripts, autorização, validação dos roteiros ou Job/serviço de IA.
-- Não há front-end neste repositório. A configuração da fila existe e usa `database` como padrão, mas worker, execução assíncrona e comportamento em ambiente não foram verificados.
-
-Consulte `TASKS.md` para o checklist detalhado de requisitos atendidos e pendentes.
+Consulte `TASKS.md` para o checklist do produto e os itens ainda pendentes,
+incluindo o trabalho de frontend.

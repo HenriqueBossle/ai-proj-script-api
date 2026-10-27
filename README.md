@@ -9,6 +9,8 @@ A IA recebe três entradas com funções diferentes:
 - `style_text`: referência de estilo, sem servir como fonte de fatos.
 
 O resultado é persistido e exposto pela API no campo `generated_content`.
+Scripts concluídos também podem ser revisados por instruções em linguagem natural,
+usando o roteiro atual como contexto, sem perder a versão existente se a revisão falhar.
 
 ## Requisitos
 
@@ -65,7 +67,10 @@ A configuração padrão usa a fila `database`. Em outro terminal, inicie o work
 php artisan queue:work
 ```
 
-A criação do roteiro despacha `GenerateScriptJob`. O Job atualiza o status, chama o serviço de geração e salva o resultado ou o erro. Para processar a geração de forma assíncrona, mantenha o worker em execução e use `QUEUE_CONNECTION=database`.
+A criação do roteiro despacha `GenerateScriptJob`. A revisão contextual despacha
+`ReviseScriptJob`; ambos usam o ciclo compartilhado em `ScriptGenerationJob` e
+chamam o `ScriptGeneratorService`. O worker deve permanecer em execução com
+`QUEUE_CONNECTION=database` para processar os jobs de forma assíncrona.
 
 ## Autenticação
 
@@ -119,7 +124,8 @@ Todas as rotas abaixo exigem token Sanctum.
 | `GET` | `/api/scripts` | Lista scripts do usuário autenticado |
 | `POST` | `/api/scripts` | Cria um script e despacha a geração |
 | `GET` | `/api/scripts/{script}` | Exibe um script próprio |
-| `PUT` / `PATCH` | `/api/scripts/{script}` | Atualiza os campos enviados |
+| `PUT` / `PATCH` | `/api/scripts/{script}` | Atualiza metadados e solicita uma nova geração |
+| `POST` | `/api/scripts/{script}/revise` | Revisa o roteiro existente com uma instrução |
 | `DELETE` | `/api/scripts/{script}` | Exclui um script próprio |
 
 ### Criar script
@@ -134,7 +140,39 @@ Todas as rotas abaixo exigem token Sanctum.
 }
 ```
 
-`source_text` é obrigatorio e `style_text` é opcionail segundo as regras do request. A resposta usa `ScriptResource` e contém os campos do script, incluindo `generated_content`, `status` e `error_message`.
+`source_text` é obrigatório e `style_text` é opcional segundo as regras do request. A resposta usa `ScriptResource` e contém os campos do script, incluindo `generated_content`, `status` e `error_message`.
+
+### Atualizar metadados e gerar novamente
+
+`PUT` ou `PATCH /api/scripts/{script}` atualiza `topic`, `source_text` e/ou
+`style_text`, limpa o conteúdo atual e solicita uma geração nova com os dados
+atualizados. A operação retorna HTTP `409` se o roteiro já estiver sendo
+processado. Use a rota de revisão abaixo para alterar o texto existente sem
+descartá-lo.
+
+### Revisar o roteiro existente
+
+`POST /api/scripts/{script}/revise`
+
+```json
+{
+  "instruction": "Melhore a introdução para prender a atenção, preservando os fatos e o restante do roteiro."
+}
+```
+
+`instruction` é obrigatório e aceita até 20.000 caracteres. A requisição
+precisa ser autenticada e o usuário deve ser o proprietário do roteiro. O script
+precisa ter `generated_content`; uma geração ainda sem conteúdo não pode ser
+revisada. Se já estiver em `processing`, a API retorna HTTP `409`.
+
+Ao aceitar a revisão, a API retorna o `ScriptResource` com `status: processing`
+e o `generated_content` anterior ainda disponível. O job envia à IA o roteiro
+atual, a instrução, o tema, a fonte factual e o estilo. A IA deve retornar o
+roteiro completo revisado; o conteúdo anterior só é substituído quando essa
+resposta não estiver vazia e a revisão terminar com sucesso. Em caso de erro da
+IA ou falha definitiva da fila, `status` passa a `failed`, `error_message` é
+preenchido sem credenciais, e o roteiro anterior é preservado. Consulte
+`GET /api/scripts/{script}` para acompanhar o processamento.
 
 ### Status de geração
 
@@ -143,7 +181,7 @@ Os estados usados pelo Job são:
 - `pending`: aguardando processamento
 - `processing`: geração em andamento
 - `done`: geração concluída
-- `failed`: ocorreu uma falha; consulte `error_message`
+- `failed`: ocorreu uma falha; consulte `error_message`. Em uma revisão, a versão anterior continua disponível.
 
 Consulte `GET /api/scripts/{script}` para acompanhar o estado.
 
@@ -151,13 +189,11 @@ Consulte `GET /api/scripts/{script}` para acompanhar o estado.
 
 A aplicação usa a tabela padrão `users` e a tabela de domínio `scripts`. O script inclui `user_id`, `topic`, `source_text`, `style_text`, `generated_content`, `status` e `error_message`. As Policies restringem visualização, atualização e exclusão ao proprietário.
 
-## Limitações conhecidas do estado atual
+## Escopo do repositório
 
-- O método `update()` atualiza os campos enviados, mas ainda não limpa `generated_content`, redefine o status nem despacha uma nova geração.
-- `index()` filtra pelo usuário autenticado, mas ainda não ordena os resultados por data.
-- As validações de texto não aplicam o limite de 20.000 caracteres descrito nos requisitos do MVP; `topic` está limitado a 255 caracteres.
-- Há divergência entre a nulabilidade esperada e as migrations atuais: `source_text` é criado sem `nullable()`, e uma migration posterior torna `generated_content` obrigatório. Revise as migrations conforme os dados que o cliente pode omitir antes de preparar um banco novo.
-- A autenticação da API e o CRUD de scripts estão definidos em `routes/api.php`; os testes existentes no repositório são principalmente os testes padrão de autenticação web.
+Este repositório contém a API Laravel. A interface React não está incluída; o
+frontend deve chamar a rota de revisão com o token Sanctum e consultar o script
+novamente para exibir a versão revisada quando o status chegar a `done`.
 
 ## Testes
 
