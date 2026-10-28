@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Jobs\GenerateScriptJob;
+use App\Jobs\ReviseScriptJob;
 use App\Models\Script;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -27,7 +28,7 @@ class ScriptApiTest extends TestCase
 
         $response = $this->actingAs($user)
             ->postJson('/api/scripts', [
-                'topic'       => 'Buracos negros',
+                'topic' => 'Buracos negros',
                 'source_text' => 'Os buracos negros são regiões do espaço com gravidade extrema.',
             ]);
 
@@ -37,9 +38,9 @@ class ScriptApiTest extends TestCase
         $response->assertJsonFragment(['style_text' => null]);
 
         $this->assertDatabaseHas('scripts', [
-            'user_id'           => $user->id,
-            'topic'             => 'Buracos negros',
-            'status'            => 'pending',
+            'user_id' => $user->id,
+            'topic' => 'Buracos negros',
+            'status' => 'pending',
             'generated_content' => null,
         ]);
 
@@ -93,7 +94,7 @@ class ScriptApiTest extends TestCase
 
         $response = $this->actingAs($user)
             ->postJson('/api/scripts', [
-                'topic'       => str_repeat('a', 256),
+                'topic' => str_repeat('a', 256),
                 'source_text' => 'Fonte válida',
             ]);
 
@@ -112,7 +113,7 @@ class ScriptApiTest extends TestCase
 
         $response = $this->actingAs($user)
             ->postJson('/api/scripts', [
-                'topic'       => 'Tema válido',
+                'topic' => 'Tema válido',
                 'source_text' => str_repeat('a', 20001),
             ]);
 
@@ -131,9 +132,9 @@ class ScriptApiTest extends TestCase
 
         $response = $this->actingAs($user)
             ->postJson('/api/scripts', [
-                'topic'       => 'Tema válido',
+                'topic' => 'Tema válido',
                 'source_text' => 'Fonte válida',
-                'style_text'  => str_repeat('a', 20001),
+                'style_text' => str_repeat('a', 20001),
             ]);
 
         $response->assertStatus(422);
@@ -173,11 +174,11 @@ class ScriptApiTest extends TestCase
         $user = User::factory()->create();
 
         $old = Script::factory()->create([
-            'user_id'    => $user->id,
+            'user_id' => $user->id,
             'created_at' => now()->subMinutes(10),
         ]);
         $new = Script::factory()->create([
-            'user_id'    => $user->id,
+            'user_id' => $user->id,
             'created_at' => now(),
         ]);
 
@@ -233,7 +234,7 @@ class ScriptApiTest extends TestCase
 
         $response = $this->actingAs($user)
             ->putJson("/api/scripts/{$script->id}", [
-                'topic'       => 'Novo tema',
+                'topic' => 'Novo tema',
                 'source_text' => 'Nova fonte factual',
             ]);
 
@@ -258,7 +259,7 @@ class ScriptApiTest extends TestCase
 
         $response = $this->actingAs($user)
             ->putJson("/api/scripts/{$script->id}", [
-                'topic'       => 'Novo tema',
+                'topic' => 'Novo tema',
                 'source_text' => 'Nova fonte factual',
             ]);
 
@@ -279,10 +280,112 @@ class ScriptApiTest extends TestCase
 
         $this->actingAs($userA)
             ->putJson("/api/scripts/{$script->id}", [
-                'topic'       => 'Tentativa inválida',
+                'topic' => 'Tentativa inválida',
                 'source_text' => 'Fonte inválida',
             ])
             ->assertStatus(403);
+
+        Queue::assertNothingPushed();
+    }
+
+    #[Test]
+    public function revise_preserva_conteudo_atual_e_despacha_job_com_a_instrucao(): void
+    {
+        Queue::fake();
+
+        $user = User::factory()->create();
+        $script = Script::factory()->done()->create([
+            'user_id' => $user->id,
+            'generated_content' => 'Versão anterior do roteiro.',
+        ]);
+
+        $response = $this->actingAs($user)
+            ->postJson("/api/scripts/{$script->id}/revise", [
+                'instruction' => 'Melhore a introdução sem alterar os fatos.',
+            ]);
+
+        $response->assertOk()
+            ->assertJsonPath('data.status', 'processing')
+            ->assertJsonPath('data.generated_content', 'Versão anterior do roteiro.');
+
+        $script->refresh();
+        $this->assertSame('processing', $script->status);
+        $this->assertSame('Versão anterior do roteiro.', $script->generated_content);
+        $this->assertNull($script->error_message);
+
+        Queue::assertPushed(ReviseScriptJob::class, fn (ReviseScriptJob $job) => $job->script->is($script)
+            && $job->instruction === 'Melhore a introdução sem alterar os fatos.'
+        );
+    }
+
+    #[Test]
+    public function revise_exige_instrucao_e_respeita_limite_de_caracteres(): void
+    {
+        Queue::fake();
+
+        $user = User::factory()->create();
+        $script = Script::factory()->done()->create(['user_id' => $user->id]);
+
+        $this->actingAs($user)
+            ->postJson("/api/scripts/{$script->id}/revise", [])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['instruction']);
+
+        $this->actingAs($user)
+            ->postJson("/api/scripts/{$script->id}/revise", [
+                'instruction' => str_repeat('a', 20001),
+            ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['instruction']);
+
+        $this->assertSame('done', $script->fresh()->status);
+        Queue::assertNothingPushed();
+    }
+
+    #[Test]
+    public function revise_rejeita_script_em_processamento_ou_sem_conteudo_anterior(): void
+    {
+        Queue::fake();
+
+        $user = User::factory()->create();
+        $processingScript = Script::factory()->processing()->create([
+            'user_id' => $user->id,
+            'generated_content' => 'Versão existente.',
+        ]);
+        $emptyScript = Script::factory()->create([
+            'user_id' => $user->id,
+            'generated_content' => null,
+        ]);
+
+        $this->actingAs($user)
+            ->postJson("/api/scripts/{$processingScript->id}/revise", [
+                'instruction' => 'Revise.',
+            ])
+            ->assertConflict();
+
+        $this->actingAs($user)
+            ->postJson("/api/scripts/{$emptyScript->id}/revise", [
+                'instruction' => 'Revise.',
+            ])
+            ->assertConflict();
+
+        Queue::assertNothingPushed();
+    }
+
+    #[Test]
+    public function revise_de_script_de_outro_usuario_retorna_403(): void
+    {
+        Queue::fake();
+
+        $user = User::factory()->create();
+        $otherUser = User::factory()->create();
+        $script = Script::factory()->done()->create(['user_id' => $otherUser->id]);
+
+        $this->actingAs($user)
+            ->postJson("/api/scripts/{$script->id}/revise", [
+                'instruction' => 'Revise.',
+            ])
+            ->assertForbidden();
 
         Queue::assertNothingPushed();
     }

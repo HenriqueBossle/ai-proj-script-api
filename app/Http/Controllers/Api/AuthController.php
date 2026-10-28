@@ -12,27 +12,22 @@ class AuthController extends Controller
 {
     public function login(Request $request)
     {
-        // 1. Validação dos dados de entrada
         $request->validate([
             'email' => 'required|email',
             'password' => 'required',
             'device_name' => 'required', // Útil para identificar de onde vem o acesso
         ]);
 
-        // 2. Busca o usuário pelo e-mail
         $user = User::where('email', $request->email)->first();
 
-        // 3. Verifica se o usuário existe e se a senha está correta
         if (! $user || ! Hash::check($request->password, $user->password)) {
             throw ValidationException::withMessages([
                 'email' => ['As credenciais fornecidas estão incorretas.']
             ]);
         }
 
-        // 3. Gera o token do Sanctum
         $token = $user->createToken($request->device_name)->plainTextToken;
 
-        // 4. Retorna o token e os dados básicos do usuário
         return response()->json([
             'token' => $token,
             'user' => $user

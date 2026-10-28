@@ -18,7 +18,7 @@ O usuário:
 7. O serviço envia os dados para a IA.
 8. A IA gera o roteiro utilizando **somente o `source_text` como fonte factual (grounding)**.
 9. O resultado é salvo em `generated_content`.
-10. O usuário pode visualizar, editar/regenerar e excluir seus roteiros.
+10. O usuário pode visualizar, atualizar metadados para gerar novamente, revisar o conteúdo existente por instrução contextual e excluir seus roteiros.
 
 ---
 
@@ -104,7 +104,9 @@ processing
 failed
 ```
 
-O usuário poderá tentar gerar novamente um roteiro que esteja em `failed`.
+O usuário pode solicitar uma revisão contextual em um roteiro `done` ou `failed`
+que ainda tenha `generated_content`. Se uma revisão falhar, o conteúdo anterior
+permanece disponível.
 
 ---
 
@@ -117,9 +119,12 @@ Responsabilidades principais:
 | `AuthController`         | Register, login e logout                  |
 | `ScriptController`       | CRUD completo de scripts                  |
 | `GenerateScriptJob`      | Processamento assíncrono da geração       |
-| `ScriptGeneratorService` | Comunicação com a IA e geração do roteiro |
+| `ReviseScriptJob`        | Revisão assíncrona de um roteiro existente |
+| `ScriptGenerationJob`    | Ciclo compartilhado de execução, sucesso e erro |
+| `ScriptGeneratorService` | Comunicação com a IA para gerar e revisar roteiros |
 | `StoreScriptRequest`     | Validação da criação                      |
 | `UpdateScriptRequest`    | Validação da atualização                  |
+| `ReviseScriptRequest`    | Validação da instrução de revisão         |
 | `ScriptPolicy`           | Autorização dos scripts                   |
 | `ScriptResource`         | Formatação das respostas da API           |
 | `routes/api.php`         | Definição das rotas da API                |
@@ -249,7 +254,7 @@ GET /api/scripts
 
 * [x] Retornar scripts do usuário autenticado
 * [x] Não retornar scripts de outros usuários
-* [ ] Ordenar pelos mais recentes — não implementado.
+* [x] Ordenar pelos mais recentes
 
 ---
 
@@ -302,7 +307,8 @@ GET /api/scripts/{script}
 PUT/PATCH /api/scripts/{script}
 ```
 
-O `update` será responsável por **atualizar os dados e solicitar uma nova geração do roteiro**.
+O `update` atualiza metadados e solicita uma nova geração. A edição contextual
+do texto existente é uma operação separada em `POST /api/scripts/{script}/revise`.
 
 Fluxo:
 
@@ -315,11 +321,9 @@ Policy
    ↓
 Atualizar topic/source_text/style_text
    ↓
-Limpar generated_content
+Limpar generated_content e error_message
    ↓
 status = pending
-   ↓
-Limpar error_message
    ↓
 Dispatch GenerateScriptJob
 ```
@@ -327,10 +331,63 @@ Dispatch GenerateScriptJob
 * [x] Validar dados com `UpdateScriptRequest`
 * [x] Verificar autorização através da Policy
 * [x] Atualizar dados do script
-* [ ] Limpar `generated_content`
-* [ ] Limpar `error_message`
+* [x] Limpar `generated_content`
+* [x] Limpar `error_message`
 * [x] Alterar status para `pending`
-* [ ] Disparar `GenerateScriptJob`
+* [x] Disparar `GenerateScriptJob`
+* [x] Retornar HTTP `409` se já estiver em processamento
+
+---
+
+## Revisão contextual
+
+Endpoint autenticado:
+
+```text
+POST /api/scripts/{script}/revise
+```
+
+Payload:
+
+```json
+{
+  "instruction": "Amplie a conclusão sem alterar o restante desnecessariamente."
+}
+```
+
+Fluxo:
+
+```text
+ReviseScriptRequest
+   ↓
+ScriptPolicy
+   ↓
+Checar e bloquear concorrência
+   ↓
+status = processing
+   ↓
+ReviseScriptJob
+   ↓
+ScriptGeneratorService::revise
+   ↓
+IA recebe roteiro anterior, instrução, tema, fonte e estilo
+   ↓
+Sucesso: substituir generated_content e status = done
+Falha: manter generated_content e status = failed
+```
+
+Checklist:
+
+* [x] Validar `instruction` obrigatória, string, até 20.000 caracteres e mensagens pt-BR
+* [x] Aplicar autorização de proprietário existente
+* [x] Recusar revisão sem conteúdo anterior
+* [x] Recusar revisão simultânea com HTTP `409`
+* [x] Preservar a versão anterior enquanto a IA processa
+* [x] Salvar a nova versão somente após resposta não vazia bem-sucedida
+* [x] Preservar a versão anterior quando IA ou fila falhar
+* [x] Sanitizar mensagens de erro antes de salvar em `error_message`
+* [x] Compartilhar ciclo de processamento entre os jobs sem duplicar tratamento
+* [x] Cobrir validação, autorização, concorrência, sucesso e falhas em testes
 
 ---
 
@@ -553,10 +610,10 @@ style_text
 * [ ] `topic` máximo de 20.000 caracteres — código limita a 255 caracteres.
 * [x] `source_text` obrigatório
 * [x] `source_text` deve ser string quando informado
-* [ ] `source_text` máximo de 20.000 caracteres — limite não configurado.
+* [x] `source_text` máximo de 20.000 caracteres
 * [x] `style_text` opcional
 * [x] `style_text` deve ser string quando informado
-* [ ] `style_text` máximo de 20.000 caracteres — limite não configurado.
+* [x] `style_text` máximo de 20.000 caracteres
 
 ### Mensagens
 
@@ -585,9 +642,10 @@ Responsável pela validação da atualização.
 * [x] Validar `topic`
 * [x] Validar `source_text`
 * [x] Validar `style_text`
-* [ ] Limite de 20.000 caracteres — não configurado nas regras atuais.
-* [ ] Mensagens em pt-BR — mensagens específicas não definidas nos Form Requests.
-* [ ] Completar atualização e regeneração (o controller atualiza os dados, mas não limpa o conteúdo nem despacha nova geração).
+* [x] Validar `source_text` e `style_text` com limite de 20.000 caracteres
+* [x] Retornar mensagens de validação em pt-BR
+* [x] Atualizar metadados, limpar conteúdo/erro, redefinir `pending` e despachar geração
+* [x] Recusar atualização durante processamento
 
 ---
 
@@ -682,9 +740,9 @@ Utilizar:
 
 ```php
 Route::middleware('auth:sanctum')->group(function () {
-    Route::apiResource('scripts', ScriptController::class);
-
     Route::post('/logout', [AuthController::class, 'logout']);
+    Route::post('/scripts/{script}/revise', [ScriptController::class, 'revise']);
+    Route::apiResource('scripts', ScriptController::class);
 });
 ```
 
@@ -697,6 +755,7 @@ GET    /api/scripts/{script}
 PUT    /api/scripts/{script}
 PATCH  /api/scripts/{script}
 DELETE /api/scripts/{script}
+POST   /api/scripts/{script}/revise
 ```
 
 ---
@@ -773,6 +832,25 @@ GenerateScriptJob
 Novo roteiro
 ```
 
+## Revisão contextual
+
+```text
+POST /api/scripts/{script}/revise
+   ↓
+Validar instrução e Policy
+   ↓
+Bloquear concorrência; manter generated_content atual
+   ↓
+status = processing
+   ↓
+ReviseScriptJob + ScriptGeneratorService
+   ↓
+IA revisa o roteiro atual usando a instrução e os metadados
+   ↓
+Sucesso: salvar roteiro completo revisado e status = done
+Falha: manter versão anterior, status = failed e error_message sanitizado
+```
+
 ---
 
 # 19. Front-end do MVP
@@ -818,6 +896,9 @@ Opcional — máximo 20.000 caracteres
 * [ ] Mostrar `generated_content`
 * [ ] Mostrar `error_message` quando houver
 * [ ] Mostrar estado de processamento
+* [ ] Permitir enviar instrução de revisão para `POST /api/scripts/{script}/revise`
+* [ ] Manter o conteúdo anterior visível enquanto uma revisão está em processamento ou falha
+* [ ] Atualizar a visualização quando a revisão terminar com status `done`
 
 ---
 
@@ -849,6 +930,10 @@ Não foi possível gerar o roteiro.
 [Tentar novamente]
 ```
 
+Durante uma revisão, `processing` não significa que o conteúdo anterior deixou
+de existir. A interface deve mantê-lo visível. Se a revisão falhar, apresentar
+`error_message` e continuar exibindo a versão preservada.
+
 ---
 
 # 21. Testes
@@ -867,25 +952,31 @@ Não foi possível gerar o roteiro.
 * [ ] Usuário consegue listar seus scripts
 * [ ] Usuário consegue visualizar seu script
 * [ ] Usuário consegue atualizar seu script
+* [x] Usuário proprietário consegue solicitar revisão contextual
 * [ ] Usuário consegue excluir seu script
 * [ ] Usuário não consegue acessar script de outro usuário
 
 ## Validação
 
-* [ ] `topic` obrigatório
-* [ ] `source_text` obrigatorio
-* [ ] `style_text` opcional
-* [ ] Limite de 20.000 caracteres — não configurado nas regras atuais.
-* [ ] Mensagens em pt-BR — mensagens específicas não definidas nos Form Requests.
+* [x] `topic` obrigatório
+* [x] `source_text` obrigatório
+* [x] `style_text` opcional
+* [x] `source_text` e `style_text` limitados a 20.000 caracteres
+* [ ] `topic` limitado a 20.000 caracteres — atualmente limitado a 255
+* [x] Instrução de revisão obrigatória, limitada a 20.000 caracteres
+* [x] Mensagens de validação em pt-BR
 
 ## Job
 
-* [ ] Script começa como `pending`
-* [ ] Job altera para `processing`
-* [ ] Sucesso altera para `done`
-* [ ] Resultado é salvo em `generated_content`
-* [ ] Erro altera para `failed`
-* [ ] Erro é salvo em `error_message`
+* [x] Script começa como `pending`
+* [x] Job altera para `processing`
+* [x] Sucesso altera para `done`
+* [x] Resultado é salvo em `generated_content`
+* [x] Erro altera para `failed`
+* [x] Erro é salvo em `error_message`
+* [x] Revisão mantém o conteúdo anterior até a conclusão bem-sucedida
+* [x] Revisões simultâneas do mesmo roteiro são bloqueadas
+* [x] Falha da revisão preserva o roteiro anterior
 
 ## IA
 
