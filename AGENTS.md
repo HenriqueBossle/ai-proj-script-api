@@ -32,7 +32,7 @@ A comunicação com a IA deve ser centralizada no `ScriptGeneratorService`.
 Ao modificar este projeto, o agente deve:
 
 * Respeitar a arquitetura definida neste documento.
-* Respeitar o escopo definido no `tasks.md`.
+* Respeitar o escopo definido em `TASKS.md`.
 * Evitar implementar funcionalidades da versão 2.
 * Manter autenticação e autorização corretamente separadas.
 * Garantir que usuários só tenham acesso aos próprios scripts.
@@ -57,7 +57,7 @@ Antes de criar uma nova abstração, verificar se ela realmente é necessária p
 * Laravel Sanctum
 * Laravel Queue
 * Eloquent ORM
-* Laravel HTTP Client
+* NeuronAI com provedor compatível com OpenAI
 * Form Requests
 * Policies
 * API Resources
@@ -419,7 +419,7 @@ O erro deve ser tratado de forma que informações sensíveis, como API Keys, n�
 Não salvar:
 
 ```text
-OPENAI_API_KEY
+AI_API_KEY
 Authorization headers
 tokens
 credenciais
@@ -545,11 +545,11 @@ SOURCE OF TRUTH = source_text
 
 ---
 
-16. Obrigatoriedade de source_text
+# 16. Obrigatoriedade de source_text
 
 source_text é obrigatório para toda geração com grounding.
 Regras para o agente:
-Sem exceção de opicionalidade: o MVP não se aplica aqui — não tratar source_text como campo opcional. Se estiver ausente, vazio ou inválido, a geração não prossegue com conteúdo factual normal.
+Sem exceção de opcionalidade: se estiver ausente, vazio ou inválido, a geração não prossegue com conteúdo factual normal.
 Nunca inventar fatos: uma geração sem fonte factual válida deve produzir uma resposta que não afirme nada factual novo. O agente deve:
 sinalizar explicitamente a ausência da fonte;
 responder apenas com o que é inferível do contexto fornecido (ou pedir a fonte), sem preencher lacunas com conhecimento não verificado.
@@ -665,9 +665,9 @@ As credenciais devem vir do `.env`.
 Exemplo:
 
 ```env
-OPENAI_API_KEY=
-OPENAI_BASE_URL=
-OPENAI_MODEL=
+AI_API_KEY=
+AI_BASE_URI=
+AI_MODEL=
 ```
 
 A configuração deve ser centralizada em:
@@ -687,7 +687,7 @@ $apiKey = 'sk-...';
 Correto:
 
 ```php
-config('services.openai.key');
+config('services.ai_provider.ai_api_key');
 ```
 
 ---
@@ -716,10 +716,10 @@ Regras:
 topic
 - required
 - string
-- max:20000
+- max:255
 
 source_text
-- nullable
+- required
 - string
 - max:20000
 
@@ -827,7 +827,7 @@ O Resource deve esconder detalhes internos desnecessários.
 Local:
 
 ```text
-app/Http/Controllers/ScriptController.php
+app/Http/Controllers/Api/ScriptController.php
 ```
 
 Métodos:
@@ -908,6 +908,7 @@ Autenticação:
 POST /api/register
 POST /api/login
 POST /api/logout
+GET  /api/user
 ```
 
 Scripts protegidos:
@@ -962,6 +963,8 @@ Deve:
 5. Retornar usuário e token.
 
 Credenciais inválidas devem retornar erro HTTP apropriado.
+No código atual, `AuthController::login()` valida os campos diretamente com
+`$request->validate`; o cadastro utiliza `RegisterRequest`.
 
 ## Logout
 
@@ -1373,7 +1376,7 @@ Além disso:
 O arquivo:
 
 ```text
-tasks.md
+TASKS.md
 ```
 
 define **o que deve ser implementado**.
@@ -1389,7 +1392,7 @@ define **como o agente deve trabalhar no projeto**.
 Em caso de dúvida:
 
 ```text
-tasks.md
+TASKS.md
     ↓
 Requisitos do produto
 
