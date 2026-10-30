@@ -382,7 +382,7 @@ Falha: manter generated_content e status = failed
 
 Checklist:
 
-* [x] Validar `instruction` obrigatória, string, até 20.000 caracteres e mensagens pt-BR
+* [x] Validar `instruction` obrigatória, string, até 600 caracteres e mensagens pt-BR
 * [x] Aplicar autorização de proprietário existente
 * [x] Recusar revisão sem conteúdo anterior
 * [x] Recusar revisão simultânea com HTTP `409`
@@ -970,7 +970,7 @@ automatizado correspondente.
 * [x] `style_text` opcional
 * [x] `source_text` e `style_text` limitados a 20.000 caracteres
 * [x] `topic` limitado a 255 caracteres
-* [x] Instrução de revisão obrigatória, limitada a 20.000 caracteres
+* [x] Instrução de revisão obrigatória, limitada a 600 caracteres
 * [x] Mensagens de validação em pt-BR
 
 ## Job

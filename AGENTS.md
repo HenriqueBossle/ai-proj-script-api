@@ -486,7 +486,7 @@ Payload:
 }
 ```
 
-`instruction` é obrigatório, string e limitado a 20.000 caracteres. Aplicar a
+`instruction` é obrigatório, string e limitado a 600 caracteres. Aplicar a
 Policy de proprietário existente. A revisão só pode começar se houver conteúdo
 gerado e se o script não estiver em `processing`; caso contrário, responder
 HTTP `409`.

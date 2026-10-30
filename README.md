@@ -164,7 +164,7 @@ descartá-lo.
 }
 ```
 
-`instruction` é obrigatório e aceita até 20.000 caracteres. A requisição
+`instruction` é obrigatório e aceita até 600 caracteres. A requisição
 precisa ser autenticada e o usuário deve ser o proprietário do roteiro. O script
 precisa ter `generated_content`; uma geração ainda sem conteúdo não pode ser
 revisada. Se já estiver em `processing`, a API retorna HTTP `409`.
