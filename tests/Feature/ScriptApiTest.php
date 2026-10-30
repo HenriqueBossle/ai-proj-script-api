@@ -8,6 +8,7 @@ use App\Models\Script;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Queue;
+use Illuminate\Support\Facades\RateLimiter;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
 
@@ -45,6 +46,36 @@ class ScriptApiTest extends TestCase
         ]);
 
         Queue::assertPushed(GenerateScriptJob::class);
+    }
+
+    #[Test]
+    public function geracao_de_script_respeita_o_limite_de_requisicoes_por_minuto(): void
+    {
+        Queue::fake();
+
+        $user = User::factory()->create();
+        RateLimiter::clear('generation-minute:'.$user->id);
+
+        $payload = [
+            'topic' => 'Buracos negros',
+            'source_text' => 'Os buracos negros são regiões do espaço com gravidade extrema.',
+        ];
+
+        foreach (range(1, 3) as $attempt) {
+            $this->actingAs($user)
+                ->postJson('/api/scripts', $payload)
+                ->assertCreated();
+        }
+
+        $this->actingAs($user)
+            ->postJson('/api/scripts', $payload)
+            ->assertTooManyRequests();
+
+        $this->actingAs($user)
+            ->getJson('/api/scripts')
+            ->assertOk();
+
+        Queue::assertPushed(GenerateScriptJob::class, 3);
     }
 
     #[Test]
@@ -388,5 +419,33 @@ class ScriptApiTest extends TestCase
             ->assertForbidden();
 
         Queue::assertNothingPushed();
+    }
+
+    #[Test]
+    public function revisao_de_script_respeita_o_limite_de_requisicoes_por_minuto(): void
+    {
+        Queue::fake();
+
+        $user = User::factory()->create();
+        RateLimiter::clear('revision-minute:'.$user->id);
+
+        foreach (range(1, 4) as $attempt) {
+            $script = Script::factory()
+                ->done()
+                ->create(['user_id' => $user->id]);
+
+            $response = $this->actingAs($user)
+                ->postJson("/api/scripts/{$script->id}/revise", [
+                    'instruction' => 'Revise o roteiro.',
+                ]);
+
+            if ($attempt < 4) {
+                $response->assertOk();
+            } else {
+                $response->assertTooManyRequests();
+            }
+        }
+
+        Queue::assertPushed(ReviseScriptJob::class, 3);
     }
 }
