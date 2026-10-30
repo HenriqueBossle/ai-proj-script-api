@@ -15,6 +15,9 @@ Route::middleware('auth:sanctum')->group(function () {
     });
     Route::post('/logout', [AuthController::class, 'logout']);
 
-    Route::post('/scripts/{script}/revise', [ScriptController::class, 'revise']);
-    Route::apiResource('/scripts', ScriptController::class);
+    Route::post('/scripts/{script}/revise', [ScriptController::class, 'revise'])
+        ->middleware('throttle:script-revision');
+
+    Route::apiResource('/scripts', ScriptController::class)
+        ->middlewareFor(['store', 'update'], 'throttle:script-generation');
 });
