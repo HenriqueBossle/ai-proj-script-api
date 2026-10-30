@@ -18,7 +18,7 @@ class ReviseScriptRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'instruction' => ['required', 'string', 'max:20000'],
+            'instruction' => ['required', 'string', 'max:600'],
         ];
     }
 
@@ -30,7 +30,7 @@ class ReviseScriptRequest extends FormRequest
         return [
             'instruction.required' => 'A instrução de revisão é obrigatória.',
             'instruction.string' => 'A instrução de revisão deve ser um texto.',
-            'instruction.max' => 'A instrução de revisão não pode ter mais de 20.000 caracteres.',
+            'instruction.max' => 'A instrução de revisão não pode ter mais de 600 caracteres.',
         ];
     }
 }
