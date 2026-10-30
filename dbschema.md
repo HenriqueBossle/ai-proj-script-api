@@ -7,18 +7,20 @@ erDiagram
         bigint id PK
         varchar name
         varchar email
+        timestamp email_verified_at "nullable"
         varchar password
+        varchar remember_token "nullable"
         timestamp created_at
         timestamp updated_at
     }
 
     SCRIPTS {
         bigint id PK
-        bigint user_id FK "→ users.id"
-        varchar topic "obrigatório — ideia do vídeo"
-        text source_text "nullable — fonte de fatos"
+        bigint user_id FK "→ users.id, cascade on delete"
+        varchar topic "obrigatório — máximo 255 caracteres"
+        text source_text "obrigatório — fonte de fatos"
         text style_text "nullable — referência de estilo"
-        longtext generated_content "nullable — roteiro gerado"
+        text generated_content "nullable — roteiro gerado"
         varchar status "default: pending"
         text error_message "nullable"
         timestamp created_at
@@ -26,16 +28,18 @@ erDiagram
     }
 ```
 
-## Fluxo de status
+## Fluxos de status implementados
 
 ```mermaid
 stateDiagram-v2
-    [*] --> pending : script criado (POST /scripts)
+    [*] --> pending : script criado ou metadados atualizados
     pending --> processing : GenerateScriptJob inicia
     processing --> done : IA respondeu
     processing --> failed : exceção / timeout da API
-    done --> [*]
-    failed --> [*] : usuário pode tentar de novo
+    done --> processing : revisão solicitada
+    failed --> processing : revisão solicitada com conteúdo anterior
+    processing --> done : revisão concluída
+    failed --> pending : atualização de metadados solicita nova geração
 ```
 
 ## Evolução v2 (referência futura, não criar ainda)

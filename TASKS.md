@@ -16,7 +16,7 @@ O usuário:
 5. O Laravel coloca a geração em uma fila.
 6. O `GenerateScriptJob` chama o `ScriptGeneratorService`.
 7. O serviço envia os dados para a IA.
-8. A IA gera o roteiro utilizando **somente o `source_text` como fonte factual (grounding)**.
+8. A IA, por meio de um endpoint compatível com a API da OpenAI, gera o roteiro utilizando **somente o `source_text` como fonte factual (grounding)**.
 9. O resultado é salvo em `generated_content`.
 10. O usuário pode visualizar, atualizar metadados para gerar novamente, revisar o conteúdo existente por instrução contextual e excluir seus roteiros.
 
@@ -33,7 +33,9 @@ Utilizar a tabela padrão `users` do Laravel.
 | `id`         | bigint    | PK                 |
 | `name`       | varchar   | obrigatório        |
 | `email`      | varchar   | obrigatório, único |
+| `email_verified_at` | timestamp | nullable       |
 | `password`   | varchar   | obrigatório        |
+| `remember_token` | varchar | nullable           |
 | `created_at` | timestamp | automático         |
 | `updated_at` | timestamp | automático         |
 
@@ -45,7 +47,7 @@ Utilizar a tabela padrão `users` do Laravel.
 | ------------------- | --------- | ------------------ |
 | `id`                | bigint    | PK                 |
 | `user_id`           | bigint    | FK → `users.id`    |
-| `topic`             | varchar   | obrigatório        |
+| `topic`             | varchar   | obrigatório, até 255 caracteres |
 | `source_text`       | text      | obrigatório        |
 | `style_text`        | text      | nullable           |
 | `generated_content` | text      | nullable           |
@@ -146,7 +148,7 @@ GenerateScriptJob
      ↓
 ScriptGeneratorService
      ↓
-OpenAI API
+Provedor compatível com OpenAI
      ↓
 Script
      ↓
@@ -192,6 +194,8 @@ Endpoint:
 POST /api/login
 ```
 
+`device_name` é obrigatório para o login da API.
+
 * [x] Validar email
 * [x] Validar senha
 * [x] Verificar credenciais
@@ -230,10 +234,10 @@ Authorization: Bearer {token}
 
 # 7. ScriptController
 
-Criar:
+Implementado em:
 
 ```text
-app/Http/Controllers/ScriptController.php
+app/Http/Controllers/Api/ScriptController.php
 ```
 
 O controller terá CRUD completo:
@@ -453,7 +457,7 @@ error_message
 * [x] Alterar status para `done`
 * [x] Capturar exceções
 * [x] Alterar status para `failed`
-* [x] Salvar `error_message` (sem sanitização comprovada de dados sensíveis).
+* [x] Salvar `error_message` com sanitização de credenciais.
 
 ---
 
@@ -462,11 +466,11 @@ error_message
 A geração será processada através de Job.
 
 * [x] Configurar driver de queue (padrão `database`; depende do ambiente).
-* [ ] Configurar worker
-* [ ] Testar processamento assíncrono
+* [ ] Configurar e manter o worker no ambiente de execução (`php artisan queue:work`); isso não é provisionado por este repositório.
+* [x] Testar despacho dos Jobs e seus ciclos de sucesso e falha
 * [ ] Configurar tentativas do Job
 * [ ] Configurar timeout
-* [ ] Testar falhas da API
+* [ ] Testar falhas reais de integração com o provedor (a suíte atual testa falhas dos Jobs com o serviço simulado).
 
 Fluxo:
 
@@ -511,7 +515,7 @@ O MVP utilizará uma API compatível com o modelo utilizado no projeto.
 * [x] Configurar API Key através do `.env` (configuração lê `AI_API_KEY`).
 * [x] Criar configuração da API (`config/services.php`, chave `ai_provider`).
 * [x] Não armazenar API Key no código (nenhuma chave literal encontrada nos arquivos de configuração revisados).
-* [x] Implementar comunicação com o provedor via NeuronAI/OpenAILike (não via Laravel HTTP Client).
+* [x] Implementar comunicação com o provedor via NeuronAI/OpenAILike.
 * [x] Processar resposta da IA
 * [x] Tratar erros da API (job marca falha e relança a exceção).
 * [x] Retornar somente o conteúdo do roteiro
@@ -568,14 +572,14 @@ O `source_text` define **quais informações factuais podem ser utilizadas**.
 Adicionar ao `.env`:
 
 ```env
-OPENAI_API_KEY=
+AI_API_KEY=
 ```
 
 E, caso necessário:
 
 ```env
-OPENAI_BASE_URL=
-OPENAI_MODEL=
+AI_BASE_URI=
+AI_MODEL=
 ```
 
 * [x] Criar configuração em `config/services.php` (configuração `ai_provider`).
@@ -605,11 +609,9 @@ style_text
 
 ### Regras
 
-* [x] `topic` obrigatório
-* [x] `topic` deve ser string
-* [ ] `topic` máximo de 20.000 caracteres — código limita a 255 caracteres.
+* [x] `topic` obrigatório, string e limitado a 255 caracteres
 * [x] `source_text` obrigatório
-* [x] `source_text` deve ser string quando informado
+* [x] `source_text` deve ser string
 * [x] `source_text` máximo de 20.000 caracteres
 * [x] `style_text` opcional
 * [x] `style_text` deve ser string quando informado
@@ -624,7 +626,7 @@ Exemplo:
 ```text
 O tema é obrigatório.
 O tema deve ser um texto.
-O tema não pode ter mais de 20.000 caracteres.
+O tema não pode ter mais de 255 caracteres.
 ```
 
 ---
@@ -639,9 +641,9 @@ app/Http/Requests/UpdateScriptRequest.php
 
 Responsável pela validação da atualização.
 
-* [x] Validar `topic`
-* [x] Validar `source_text`
-* [x] Validar `style_text`
+* [x] Validar `topic` (máximo de 255 caracteres)
+* [x] Validar `source_text` (obrigatório, máximo de 20.000 caracteres)
+* [x] Validar `style_text` (opcional, máximo de 20.000 caracteres)
 * [x] Validar `source_text` e `style_text` com limite de 20.000 caracteres
 * [x] Retornar mensagens de validação em pt-BR
 * [x] Atualizar metadados, limpar conteúdo/erro, redefinir `pending` e despachar geração
@@ -732,6 +734,7 @@ routes/api.php
 POST /api/register
 POST /api/login
 POST /api/logout
+GET  /api/user
 ```
 
 ## Scripts
@@ -789,7 +792,7 @@ status = processing
    ↓
 ScriptGeneratorService
    ↓
-OpenAI API
+Provedor compatível com OpenAI
    ↓
 Roteiro gerado
    ↓
@@ -880,7 +883,7 @@ Tema do vídeo
 
 Fonte de informações
 [____________________________]
-Origatorio — máximo 20.000 caracteres
+Obrigatório — máximo 20.000 caracteres
 
 Estilo de escrita
 [____________________________]
@@ -938,6 +941,10 @@ de existir. A interface deve mantê-lo visível. Se a revisão falhar, apresenta
 
 # 21. Testes
 
+Os testes marcados abaixo referem-se à cobertura automatizada existente. A
+implementação de uma rota, por si só, não significa que ela já tenha um teste
+automatizado correspondente.
+
 ## Autenticação
 
 * [ ] Cadastro funciona
@@ -948,13 +955,13 @@ de existir. A interface deve mantê-lo visível. Se a revisão falhar, apresenta
 
 ## Scripts
 
-* [ ] Usuário consegue criar script
-* [ ] Usuário consegue listar seus scripts
+* [x] Usuário consegue criar script
+* [x] Usuário consegue listar seus scripts
 * [ ] Usuário consegue visualizar seu script
-* [ ] Usuário consegue atualizar seu script
+* [x] Usuário consegue atualizar seu script
 * [x] Usuário proprietário consegue solicitar revisão contextual
-* [ ] Usuário consegue excluir seu script
-* [ ] Usuário não consegue acessar script de outro usuário
+* [ ] Usuário consegue excluir seu próprio script
+* [x] Usuário não consegue visualizar, atualizar ou excluir script de outro usuário
 
 ## Validação
 
@@ -962,7 +969,7 @@ de existir. A interface deve mantê-lo visível. Se a revisão falhar, apresenta
 * [x] `source_text` obrigatório
 * [x] `style_text` opcional
 * [x] `source_text` e `style_text` limitados a 20.000 caracteres
-* [ ] `topic` limitado a 20.000 caracteres — atualmente limitado a 255
+* [x] `topic` limitado a 255 caracteres
 * [x] Instrução de revisão obrigatória, limitada a 20.000 caracteres
 * [x] Mensagens de validação em pt-BR
 
@@ -980,18 +987,16 @@ de existir. A interface deve mantê-lo visível. Se a revisão falhar, apresenta
 
 ## IA
 
-* [ ] API Key é carregada pelo `.env`
-* [ ] `topic` é enviado ao serviço
-* [ ] `source_text` é enviado como fonte de grounding
-* [ ] `style_text` é enviado como referência de estilo
-* [ ] Prompt impede uso de fatos externos ao `source_text`
-* [ ] Resposta da IA é salva corretamente
+* [ ] Teste automatizado confirma a leitura da API Key do `.env`
+* [ ] Testes automatizados verificam `topic`, `source_text` e `style_text` enviados ao provedor
+* [ ] Teste automatizado verifica grounding e formato da resposta do provedor
 
 ---
 
 # 22. Definition of Done
 
-O MVP estará concluído quando o seguinte fluxo funcionar:
+O backend do MVP implementa o seguinte fluxo. A interface continua pendente e
+está fora deste repositório:
 
 ```text
 ┌─────────────────────────┐
@@ -1030,7 +1035,7 @@ O MVP estará concluído quando o seguinte fluxo funcionar:
 ┌─────────────────────────┐
 │ ScriptGeneratorService  │
 │                         │
-│ OpenAI API              │
+│ Provedor compatível     │
 │ + grounding             │
 └────────────┬────────────┘
              ↓

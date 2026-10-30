@@ -1,6 +1,6 @@
 # API de geração de roteiros com IA
 
-API Laravel para cadastro de usuários e criação de roteiros. A geração é solicitada por um Job de fila e a integração com o provedor de IA fica no `ScriptGeneratorService`, usando NeuronAI e um endpoint compatível com a API da OpenAI.
+API Laravel para cadastro de usuários e criação de roteiros. A geração é solicitada por um Job de fila e a integração com o provedor de IA fica no `ScriptGeneratorService`, usando NeuronAI com um endpoint compatível com a API da OpenAI.
 
 A IA recebe três entradas com funções diferentes:
 
@@ -17,7 +17,7 @@ usando o roteiro atual como contexto, sem perder a versão existente se a revis�
 - PHP 8.3 ou superior
 - Composer
 - Um banco configurado pelo Laravel (SQLite é o padrão no `.env.example`)
-- Um provedor de IA compatível com OpenAI configurado para o agente
+- Um provedor de IA compatível com a API da OpenAI
 
 ## Instalação local
 
@@ -109,11 +109,13 @@ O cadastro retorna HTTP `201`, com `token` e `user`.
 }
 ```
 
-`device_name` é obrigatório no login atual. O endpoint retorna o token e os dados do usuário. Credenciais inválidas retornam erro de validação.
+`device_name` é obrigatório no login atual. O endpoint retorna o token e os dados do usuário. Credenciais inválidas retornam HTTP `422` com erro de validação.
 
 ### Logout
 
 `POST /api/logout` — requer autenticação. Revoga o token atual.
+
+`GET /api/user` — requer autenticação. Retorna o usuário associado ao token.
 
 ## Rotas de scripts
 
@@ -141,6 +143,8 @@ Todas as rotas abaixo exigem token Sanctum.
 ```
 
 `source_text` é obrigatório e `style_text` é opcional segundo as regras do request. A resposta usa `ScriptResource` e contém os campos do script, incluindo `generated_content`, `status` e `error_message`.
+`topic` aceita até 255 caracteres; `source_text` e `style_text` aceitam até
+20.000 caracteres.
 
 ### Atualizar metadados e gerar novamente
 
@@ -195,3 +199,67 @@ Este repositório contém a API Laravel. A interface React não está incluída;
 frontend deve chamar a rota de revisão com o token Sanctum e consultar o script
 novamente para exibir a versão revisada quando o status chegar a `done`.
 
+## Testes
+
+Para executar a suíte Laravel:
+
+```bash
+php artisan test
+```
+
+A configuração PHPUnit usa SQLite em memória e define a fila como `sync` durante os testes.
+
+## Deploy no Render com Docker
+
+O [Dockerfile](./Dockerfile) prepara a API para produção com PHP 8.3, Apache e
+PostgreSQL. O filesystem dos serviços Render é efêmero por padrão; use um
+PostgreSQL gerenciado para persistir scripts, sessões, cache e fila. Não use o
+SQLite local em produção.
+
+### Serviço Web
+
+1. Crie um PostgreSQL no Render e copie a **Internal Database URL**.
+2. Crie um **Web Service** conectado a este repositório, selecionando o runtime
+   **Docker** e o `Dockerfile` da raiz.
+3. Configure estas variáveis no serviço:
+
+   | Variável | Valor |
+   | --- | --- |
+   | `APP_ENV` | `production` |
+   | `APP_DEBUG` | `false` |
+   | `APP_KEY` | Gere com `php artisan key:generate --show` localmente |
+   | `APP_URL` | URL HTTPS pública do serviço Web |
+   | `DB_CONNECTION` | `pgsql` |
+   | `DB_URL` | Internal Database URL do PostgreSQL |
+   | `QUEUE_CONNECTION` | `database` |
+   | `LOG_CHANNEL` | `stderr` |
+   | `AI_API_KEY` | Chave do provedor de IA |
+   | `AI_BASE_URI` | URL base do endpoint compatível com OpenAI |
+   | `AI_MODEL` | Identificador do modelo |
+
+   A configuração Laravel deste projeto lê `DB_URL`; por isso, copie para essa
+   variável a Internal Database URL que o Render também pode apresentar como
+   `DATABASE_URL`. Não coloque URLs com credenciais, tokens ou chaves no
+   repositório.
+
+4. Configure o **Pre-Deploy Command** do serviço como
+   `php artisan migrate --force`. Se o plano escolhido não disponibilizar esse
+   recurso, execute o mesmo comando pelo Shell do serviço antes de receber
+   tráfego.
+5. Configure o health check path como `/up`. O container escuta a porta
+   informada pelo Render através de `PORT`.
+
+### Worker da fila
+
+Crie um serviço **Background Worker** no Render usando o mesmo repositório e
+Dockerfile. Configure nele as mesmas variáveis de ambiente do Web Service,
+incluindo `APP_KEY`, `DB_CONNECTION`, `DB_URL`, `QUEUE_CONNECTION` e as
+credenciais de IA. Defina o comando do worker para:
+
+```bash
+php artisan queue:work database --sleep=3 --tries=1 --timeout=60
+```
+
+O worker e a API precisam usar o mesmo PostgreSQL; sem o worker, os pedidos
+permanecem na fila e a geração/revisão não é processada. O serviço Web e o
+Background Worker são recursos separados no Render e podem ter custos próprios.

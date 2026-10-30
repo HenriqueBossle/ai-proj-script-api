@@ -4,7 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Requests\Auth\RegisterRequest;
 use App\Models\User;
-use Illuminate\Http\Request;
+use Illuminate\Http\Request; 
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\ValidationException;
 
